@@ -12,9 +12,17 @@ load_dotenv()
 
 from src.models.srs_schema import SRSDocument
 from src.services.ai_generator import generate_srs_from_notes
+from src.services.exporter import (
+    create_project_bundle_zip,
+    generate_markdown_report,
+    generate_rtm_csv_bytes,
+)
 from src.data.sample_inputs import SAMPLE_SCENARIOS
 from src.validators.syntax_validator import clean_and_validate_mermaid, validate_sql_ddl
 from src.validators.db_sandbox import execute_and_audit_ddl
+
+# Tương thích ngược với các module và test
+export_srs_markdown = generate_markdown_report
 
 # Thiết lập cấu hình trang Streamlit
 st.set_page_config(
@@ -176,114 +184,6 @@ def render_mermaid(mermaid_code: str, height: int = 550, diagram_type: str = "")
     """
     components.html(html_content, height=height, scrolling=True)
 
-
-def export_srs_markdown(doc: SRSDocument) -> str:
-    """Chuyển đổi đối tượng SRSDocument thành văn bản Markdown chuẩn IEEE 29148 & BABOK v3."""
-    lines = [
-        f"# {doc.project_title}",
-        "",
-        "> **Tài liệu Đặc tả Yêu cầu Phần mềm (SRS) & Kiến trúc Hệ thống**",
-        "> Tuân thủ chuẩn IEEE 29148, BABOK Guide v3, ISO/IEC 25010 & Third Normal Form (3NF).",
-        "",
-        "---",
-        "",
-        "## 1. Mục tiêu Kinh doanh & Phạm vi Hệ thống (Business Objective)",
-        f"{doc.business_objective}",
-        "",
-        "## 2. Danh sách Tác nhân Tham gia (Actors)",
-    ]
-    for actor in doc.actors:
-        lines.append(f"- **{actor}**")
-    lines.extend(["", "## 3. Đặc tả Yêu cầu Chức năng (Functional Requirements)", ""])
-
-    for fr in doc.functional_requirements:
-        lines.append(f"### {fr.req_id}: {fr.title}")
-        lines.append(f"- **Độ ưu tiên:** `{fr.priority}`")
-        lines.append(f"- **User Story:** *{fr.user_story}*")
-        lines.append("")
-        lines.append("#### Tiêu chí Chấp nhận (Acceptance Criteria - Gherkin BDD):")
-        for idx, ac in enumerate(fr.acceptance_criteria, start=1):
-            lines.append(f"**Kịch bản {idx}:**")
-            lines.append(f"- **Given:** {ac.given}")
-            lines.append(f"- **When:** {ac.when}")
-            lines.append(f"- **Then:** {ac.then}")
-            lines.append("")
-
-    lines.extend(["## 4. Đặc tả Yêu cầu Phi Chức năng (Non-Functional Requirements)", ""])
-    lines.append("| Phân loại | Mô tả yêu cầu (IEEE 29148) | Chỉ số đo lường (Metric / SLA) |")
-    lines.append("| :--- | :--- | :--- |")
-    for nfr in doc.non_functional_requirements:
-        lines.append(f"| **{nfr.category}** | {nfr.description} | `{nfr.metric}` |")
-    lines.append("")
-
-    lines.extend([
-        "## 5. Sơ đồ Tuần tự Nghiệp vụ Trọng tâm (UML Sequence Diagram)",
-        "",
-        "```mermaid",
-        doc.sequence_diagram_mermaid.strip(),
-        "```",
-        "",
-    ])
-
-    state_diagram = getattr(doc, "state_diagram_mermaid", "")
-    state_entity = getattr(doc, "state_machine_entity", "")
-    if state_diagram:
-        entity_title = f" - {state_entity}" if state_entity else ""
-        lines.extend([
-            f"## 5.1. Sơ đồ Máy Trạng thái Thực thể Cốt lõi (UML State Machine Diagram){entity_title}",
-            "",
-            "```mermaid",
-            state_diagram.strip(),
-            "```",
-            "",
-        ])
-
-    lines.extend([
-        "## 6. Sơ đồ Thực thể Quan hệ Chuẩn 3NF (Mermaid ERD)",
-        "",
-        "```mermaid",
-        doc.er_diagram_mermaid.strip(),
-        "```",
-        "",
-        "## 7. Kịch bản Khởi tạo Cơ sở Dữ liệu (SQL DDL Script - PostgreSQL)",
-        "",
-        "```sql",
-        doc.sql_ddl_script.strip(),
-        "```",
-        "",
-    ])
-
-    traceability_matrix = getattr(doc, "traceability_matrix", [])
-    if traceability_matrix:
-        lines.extend([
-            "## 8. Ma trận Truy vết Yêu cầu (Requirements Traceability Matrix - RTM)",
-            "",
-            "| Mã YC | Tên Tính năng | Quy tắc Nghiệp vụ (Business Rule) | Bảng CSDL Liên quan | Kịch bản Kiểm thử Nghiệm thu |",
-            "| :--- | :--- | :--- | :--- | :--- |",
-        ])
-        for item in traceability_matrix:
-            related = ", ".join(item.related_tables) if isinstance(item.related_tables, list) else str(item.related_tables)
-            lines.append(f"| **{item.req_id}** | {item.feature_name} | {item.business_rule} | `{related}` | {item.test_scenario_summary} |")
-        lines.append("")
-
-    quality_audit = getattr(doc, "quality_audit", None)
-    if quality_audit and getattr(quality_audit, "clarification_questions", []):
-        lines.extend([
-            "## 9. Đánh giá Chất lượng Đặc tả & Điểm Cần Phỏng vấn Lại (Quality & Ambiguity Audit)",
-            "",
-            f"- **Điểm Tuân thủ IEEE 29148:** `{getattr(quality_audit, 'ieee_compliance_score', 90)}/100`",
-            f"- **Điểm Chuẩn User Story INVEST:** `{getattr(quality_audit, 'invest_score', 90)}/100`",
-            "",
-            "### Câu hỏi Đào sâu Nghiệp vụ Cần Xác nhận lại với Stakeholders (Follow-up Questions):",
-            "",
-        ])
-        for q_idx, q in enumerate(quality_audit.clarification_questions, start=1):
-            lines.append(f"{q_idx}. {q}")
-        lines.append("")
-
-    return "\n".join(lines)
-
-
 # -------------------------------------------------------------
 # SIDEBAR
 # -------------------------------------------------------------
@@ -389,6 +289,14 @@ if generate_clicked:
             try:
                 result_doc = generate_srs_from_notes(meeting_notes_text, api_key)
                 st.session_state["srs_result"] = result_doc
+                # Dọn dẹp các key widget live edit để đồng bộ kết quả mới
+                for edit_k in [
+                    "edit_seq_mermaid",
+                    "edit_state_mermaid",
+                    "live_workbench_erd",
+                    "live_workbench_sql",
+                ]:
+                    st.session_state.pop(edit_k, None)
                 st.toast("🎉 Đã sinh thành công Đặc tả Hệ thống & Sơ đồ Kiến trúc!", icon="✅")
             except Exception as e:
                 st.error(f"❌ Quá trình phân tích gặp sự cố: {str(e)}")
@@ -521,8 +429,22 @@ if doc:
 
         render_mermaid(doc.sequence_diagram_mermaid, height=560, diagram_type="sequenceDiagram")
 
-        with st.expander("📄 Xem mã nguồn Mermaid Sequence Diagram"):
-            st.code(doc.sequence_diagram_mermaid, language="mermaid")
+        with st.expander("🛠️ Xem & Tinh chỉnh Trực tiếp Mã nguồn Mermaid Sequence Diagram (Live Edit)"):
+            new_seq_code = st.text_area(
+                "Chỉnh sửa mã Mermaid Sequence Diagram:",
+                value=doc.sequence_diagram_mermaid,
+                height=220,
+                key="edit_seq_mermaid",
+            )
+            if st.button("🔄 Cập nhật Sơ đồ Sequence", key="btn_update_seq"):
+                try:
+                    cleaned_seq = clean_and_validate_mermaid(new_seq_code, diagram_type="sequenceDiagram")
+                    doc.sequence_diagram_mermaid = cleaned_seq
+                except Exception:
+                    doc.sequence_diagram_mermaid = new_seq_code
+                st.session_state["srs_result"] = doc
+                st.toast("✅ Đã cập nhật Sơ đồ Tuần tự!", icon="🔄")
+                st.rerun()
 
         state_diagram = getattr(doc, "state_diagram_mermaid", "")
         state_entity = getattr(doc, "state_machine_entity", "")
@@ -534,11 +456,55 @@ if doc:
 
             render_mermaid(state_diagram, height=560, diagram_type="stateDiagram-v2")
 
-            with st.expander("📄 Xem mã nguồn Mermaid State Machine Diagram"):
-                st.code(state_diagram, language="mermaid")
+            with st.expander("🛠️ Xem & Tinh chỉnh Trực tiếp Mã nguồn Mermaid State Machine Diagram (Live Edit)"):
+                new_state_code = st.text_area(
+                    "Chỉnh sửa mã Mermaid State Machine Diagram:",
+                    value=state_diagram,
+                    height=220,
+                    key="edit_state_mermaid",
+                )
+                if st.button("🔄 Cập nhật Sơ đồ State Machine", key="btn_update_state"):
+                    try:
+                        cleaned_state = clean_and_validate_mermaid(new_state_code, diagram_type="stateDiagram-v2")
+                        doc.state_diagram_mermaid = cleaned_state
+                    except Exception:
+                        doc.state_diagram_mermaid = new_state_code
+                    st.session_state["srs_result"] = doc
+                    st.toast("✅ Đã cập nhật Sơ đồ Máy Trạng thái!", icon="🔄")
+                    st.rerun()
 
     # ---------------- TAB 3: ERD 3NF & SQL DDL ----------------
     with tab3:
+        with st.expander("🛠️ Chế độ Tinh chỉnh Kiến trúc CSDL (DBA Live Workbench)", expanded=False):
+            st.caption("Cho phép Kỹ sư CSDL / Solution Architect chỉnh sửa trực tiếp sơ đồ ERD hoặc thêm/sửa bảng, cột, khóa ngoại trong kịch bản SQL DDL để kiểm định lại tức thì.")
+            workbench_col1, workbench_col2 = st.columns(2, gap="medium")
+            with workbench_col1:
+                live_erd_input = st.text_area(
+                    "Chỉnh sửa Mermaid ERD (3NF):",
+                    value=doc.er_diagram_mermaid,
+                    height=240,
+                    key="live_workbench_erd",
+                )
+            with workbench_col2:
+                live_sql_input = st.text_area(
+                    "Chỉnh sửa Kịch bản SQL DDL (PostgreSQL / ANSI):",
+                    value=doc.sql_ddl_script,
+                    height=240,
+                    key="live_workbench_sql",
+                )
+
+            if st.button("🚀 Áp dụng & Kiểm định lại CSDL", type="primary", key="btn_apply_db_live"):
+                try:
+                    cleaned_erd = clean_and_validate_mermaid(live_erd_input, diagram_type="erDiagram")
+                    doc.er_diagram_mermaid = cleaned_erd
+                except Exception:
+                    doc.er_diagram_mermaid = live_erd_input
+
+                doc.sql_ddl_script = live_sql_input
+                st.session_state["srs_result"] = doc
+                st.toast("⚡ Đã cập nhật CSDL và chạy kiểm toán Sandbox thành công!", icon="✅")
+                st.rerun()
+
         col_erd, col_sql = st.columns([1, 1], gap="medium")
 
         with col_erd:
@@ -556,7 +522,7 @@ if doc:
 
         with col_sql:
             st.markdown("#### 💾 Kịch bản Khởi tạo CSDL (SQL DDL)")
-            
+
             # Kiểm định cú pháp SQL DDL bằng sqlglot
             is_sql_valid, sql_validation_msg = validate_sql_ddl(doc.sql_ddl_script)
             if is_sql_valid:
@@ -601,23 +567,70 @@ if doc:
             ]
             st.dataframe(tables_summary, use_container_width=True, hide_index=True)
 
-    # ---------------- TAB 4: EXPORT MARKDOWN ----------------
+    # ---------------- TAB 4: ENTERPRISE EXPORT BUNDLE ----------------
     with tab4:
-        st.markdown("#### 📥 Xuất Tài liệu Đặc tả Hệ thống (SRS Export)")
-        st.caption("Tải về toàn bộ hồ sơ dự án dưới định dạng Markdown để lưu trữ hoặc nhập vào Notion / Jira / Confluence.")
+        st.markdown("#### 📦 Xuất Bản & Đóng Gói Hồ Sơ Dự Án (Enterprise Export Bundle)")
+        st.caption("Tải về toàn bộ hồ sơ thiết kế đặc tả, kịch bản CSDL, ma trận truy vết RTM và sơ đồ kiến trúc hệ thống đa định dạng.")
 
-        md_content = export_srs_markdown(doc)
+        md_content = generate_markdown_report(doc)
+        rtm_csv_bytes = generate_rtm_csv_bytes(doc)
+        bundle_zip_bytes = create_project_bundle_zip(doc, md_content)
 
-        slug_title = re.sub(r"[^a-zA-Z0-9_\-]+", "_", doc.project_title.lower()).strip("_")
-        download_filename = f"SRS_{slug_title}.md"
+        slug_title = re.sub(r"[^a-zA-Z0-9_\-]+", "_", doc.project_title.lower()).strip("_") or "project"
+        zip_filename = f"SRS_Bundle_{slug_title}.zip"
+        md_filename = f"01_SRS_{slug_title}.md"
+        sql_filename = f"02_Schema_{slug_title}.sql"
+        csv_filename = f"03_RTM_{slug_title}.csv"
 
-        st.download_button(
-            label="📥 Tải xuống Toàn bộ Tài liệu SRS (.md)",
-            data=md_content.encode("utf-8"),
-            file_name=download_filename,
-            mime="text/markdown",
-            type="primary",
-        )
+        col_dl1, col_dl2, col_dl3, col_dl4 = st.columns(4)
+        with col_dl1:
+            st.download_button(
+                label="📦 Tải Trọn bộ Hồ sơ (.ZIP)",
+                data=bundle_zip_bytes,
+                file_name=zip_filename,
+                mime="application/zip",
+                type="primary",
+                use_container_width=True,
+                help="Gói ZIP gồm 7 file: SRS Markdown, SQL DDL, RTM CSV, Model JSON và 3 sơ đồ Mermaid .mmd",
+            )
+        with col_dl2:
+            st.download_button(
+                label="📄 Tải Đặc tả SRS (.MD)",
+                data=md_content.encode("utf-8"),
+                file_name=md_filename,
+                mime="text/markdown",
+                use_container_width=True,
+                help="Tài liệu đặc tả yêu cầu SRS chuẩn IEEE 29148",
+            )
+        with col_dl3:
+            st.download_button(
+                label="💾 Tải Kịch bản CSDL (.SQL)",
+                data=doc.sql_ddl_script.encode("utf-8"),
+                file_name=sql_filename,
+                mime="application/sql",
+                use_container_width=True,
+                help="Kịch bản tạo bảng và khóa ngoại chuẩn 3NF",
+            )
+        with col_dl4:
+            st.download_button(
+                label="📊 Tải Ma trận RTM (.CSV - Excel)",
+                data=rtm_csv_bytes,
+                file_name=csv_filename,
+                mime="text/csv",
+                use_container_width=True,
+                help="Ma trận truy vết yêu cầu chuẩn BABOK v3 (UTF-8 BOM)",
+            )
 
-        with st.expander("👁️ Xem trước nội dung tài liệu Markdown", expanded=True):
-            st.text_area("Markdown Preview", value=md_content, height=400)
+        st.divider()
+
+        tab_prev_md, tab_prev_json = st.tabs([
+            "👁️ Xem trước Đặc tả Markdown (IEEE 29148)",
+            "🧩 Xem trước Cấu trúc JSON Schema (AST Data)",
+        ])
+        with tab_prev_md:
+            st.text_area("Markdown Preview", value=md_content, height=450)
+        with tab_prev_json:
+            try:
+                st.json(doc.model_dump())
+            except Exception:
+                st.code(doc.model_dump_json(indent=2), language="json")
