@@ -60,7 +60,16 @@ CÁC NGUYÊN TẮC BẮT BUỘC:
      + third_nf_justification: Giải thích chi tiết, thuyết phục tại sao thiết kế cơ sở dữ liệu đã đạt Chuẩn dạng 3 (3NF), nêu rõ cách triệt tiêu phụ thuộc từng phần (2NF) và phụ thuộc bắc cầu (3NF).
      + clarification_questions: Phân tích sâu các lỗ hổng, điểm thiếu sót, thông tin mâu thuẫn hoặc mơ hồ trong biên bản họp thô (Meeting Notes), đưa ra tối thiểu 3-5 câu hỏi nghiệp vụ sắc bén (Elicitation Follow-up Questions) để BA phỏng vấn lại khách hàng/Stakeholders nhằm triệt tiêu rủi ro Scope Creep.
 
-7. Định dạng dữ liệu đầu ra:
+7. Mô hình hóa Sơ đồ Máy Trạng thái (UML State Machine Diagram - stateDiagram-v2):
+   - state_machine_entity: Tên thực thể cốt lõi có vòng đời biến đổi trạng thái nghiệp vụ phức tạp nhất trong hệ thống (Ví dụ: "Vòng đời Trạng thái Vé / Chỗ ngồi (Ticket & Seat Lifecycle)" hoặc "Vòng đời Đơn đặt vé (Booking Lifecycle)").
+   - state_diagram_mermaid: BẮT BUỘC bắt đầu trực tiếp bằng 'stateDiagram-v2'.
+     + Sử dụng `[*]` cho trạng thái bắt đầu (initial) và trạng thái kết thúc (terminal).
+     + Nếu tên trạng thái có khoảng trắng hoặc tiếng Việt, khai báo định danh: `state "Tên Trạng Thái" as StateID` (Ví dụ: `state "Đang Giữ Chỗ" as Held`, `state "Đã Thanh Toán" as Confirmed`).
+     + Chuyển trạng thái theo cú pháp: `State1 --> State2 : Tên sự kiện kích hoạt` (Ví dụ: `Held --> Confirmed : Thanh toán thành công`).
+     + Tuyệt đối KHÔNG chứa dấu chấm phẩy `;` hay ngoặc nhọn `{}` trong nhãn sự kiện.
+     + Không chứa thẻ markdown code fence thừa trong chuỗi.
+
+8. Định dạng dữ liệu đầu ra:
    - Toàn bộ dữ liệu trả về phải tuân thủ nghiêm ngặt theo schema JSON của SRSDocument.
 """
 
@@ -89,7 +98,7 @@ def generate_srs_from_notes(raw_notes: str, api_key: str) -> SRSDocument:
     client = genai.Client(api_key=api_key.strip())
 
     user_prompt = f"""Dưới đây là biên bản ghi chú họp khách hàng thô (Meeting Notes).
-Hãy phân tích nghiệp vụ, chuẩn hóa theo IEEE 29148 & BABOK, thiết kế sơ đồ Sequence, ERD 3NF và sinh mã SQL DDL chi tiết:
+Hãy phân tích nghiệp vụ, chuẩn hóa theo IEEE 29148 & BABOK, thiết kế sơ đồ Sequence, State Machine, ERD 3NF và sinh mã SQL DDL chi tiết:
 
 ---
 {raw_notes.strip()}
@@ -126,6 +135,14 @@ Hãy phân tích nghiệp vụ, chuẩn hóa theo IEEE 29148 & BABOK, thiết k�
         doc.er_diagram_mermaid = clean_and_validate_mermaid(
             doc.er_diagram_mermaid, diagram_type="erDiagram"
         )
+    except Exception:
+        pass
+
+    try:
+        if doc.state_diagram_mermaid:
+            doc.state_diagram_mermaid = clean_and_validate_mermaid(
+                doc.state_diagram_mermaid, diagram_type="stateDiagram-v2"
+            )
     except Exception:
         pass
 

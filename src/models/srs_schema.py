@@ -167,3 +167,14 @@ class SRSDocument(BaseModel):
         default_factory=QualityAudit,
         description="Bộ kiểm toán chất lượng đặc tả IEEE 29148, tiêu chuẩn INVEST và cảnh báo điểm mơ hồ",
     )
+    state_machine_entity: str = Field(
+        default="",
+        description="Tên thực thể và đối tượng nghiệp vụ được mô hình hóa trạng thái (ví dụ: 'Vòng đời Trạng thái Đơn đặt vé / Ghế ngồi (Booking & Seat Lifecycle)')",
+    )
+    state_diagram_mermaid: str = Field(
+        default="",
+        description=(
+            "Mã Mermaid.js hợp lệ bắt đầu bằng từ khóa 'stateDiagram-v2' mô tả đầy đủ các trạng thái, "
+            "sự kiện chuyển tiếp và điều kiện rẽ nhánh của thực thể cốt lõi."
+        ),
+    )

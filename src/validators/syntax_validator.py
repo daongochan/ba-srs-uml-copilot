@@ -106,20 +106,31 @@ def _clean_seq_message_line(line: str) -> str:
     return line
 
 
+def _clean_state_line(line: str) -> str:
+    """Làm sạch nhãn sự kiện và loại bỏ dấu chấm phẩy ';' trong State Machine Diagram."""
+    # Xóa dấu chấm phẩy thừa ở cuối dòng
+    cleaned = re.sub(r";\s*$", "", line)
+    if "-->" in cleaned and ":" in cleaned:
+        prefix, label = cleaned.split(":", 1)
+        cleaned_label = label.replace(";", "").replace("{", "(").replace("}", ")")
+        return f"{prefix}:{cleaned_label}"
+    return cleaned
+
+
 def clean_and_validate_mermaid(code: str, diagram_type: str = "") -> str:
     """Loại bỏ các thẻ markdown thừa (như ```mermaid và ```), unescape ký tự xuống dòng,
-    chuẩn hóa cú pháp Mermaid đặc thù (erDiagram, sequenceDiagram) và kiểm tra tính hợp lệ
+    chuẩn hóa cú pháp Mermaid đặc thù (erDiagram, sequenceDiagram, stateDiagram-v2) và kiểm tra tính hợp lệ
     của từ khóa đầu tiên.
 
     Args:
         code: Đoạn mã Mermaid (có thể chứa markdown code block, \\n escape)
-        diagram_type: Kiểu sơ đồ ('sequenceDiagram', 'erDiagram', hoặc để trống để tự động nhận diện)
+        diagram_type: Kiểu sơ đồ ('sequenceDiagram', 'erDiagram', 'stateDiagram-v2', hoặc để trống để tự động nhận diện)
 
     Returns:
         str: Đoạn mã Mermaid đã được làm sạch và chuẩn hóa triệt để.
 
     Raises:
-        ValueError: Nếu mã rỗng hoặc từ khóa đầu tiên không phải sequenceDiagram / erDiagram.
+        ValueError: Nếu mã rỗng hoặc từ khóa đầu tiên không hợp lệ.
     """
     if not code or not code.strip():
         raise ValueError("Mã Mermaid không được để trống.")
@@ -145,7 +156,7 @@ def clean_and_validate_mermaid(code: str, diagram_type: str = "") -> str:
         first_keyword = stripped_line.split()[0]
         break
 
-    valid_keywords = {"sequenceDiagram", "erDiagram"}
+    valid_keywords = {"sequenceDiagram", "erDiagram", "stateDiagram-v2", "stateDiagram"}
     if not first_keyword:
         raise ValueError("Mã Mermaid không chứa cú pháp hợp lệ.")
 
@@ -158,7 +169,7 @@ def clean_and_validate_mermaid(code: str, diagram_type: str = "") -> str:
 
     if not matched_keyword:
         raise ValueError(
-            f"Cú pháp Mermaid không hợp lệ: Từ khóa đầu tiên phải là 'sequenceDiagram' hoặc 'erDiagram' "
+            f"Cú pháp Mermaid không hợp lệ: Từ khóa đầu tiên phải là 'sequenceDiagram' hoặc 'erDiagram' hoặc 'stateDiagram-v2' "
             f"(nhận được: '{first_keyword}')."
         )
 
@@ -166,6 +177,9 @@ def clean_and_validate_mermaid(code: str, diagram_type: str = "") -> str:
     norm_type = diagram_type.strip().lower() if diagram_type else ""
     is_erd = (norm_type in ("erdiagram", "erd")) or (matched_keyword == "erDiagram")
     is_seq = (norm_type in ("sequencediagram", "sequence")) or (matched_keyword == "sequenceDiagram")
+    is_state = (norm_type in ("statediagram-v2", "statediagram", "state")) or (
+        matched_keyword in ("stateDiagram-v2", "stateDiagram")
+    )
 
     # 4. Áp dụng quy tắc làm sạch theo từng loại sơ đồ
     processed_lines: List[str] = []
@@ -197,6 +211,19 @@ def clean_and_validate_mermaid(code: str, diagram_type: str = "") -> str:
             cleaned_line = _clean_seq_participant_line(line)
             cleaned_line = _clean_seq_message_line(cleaned_line)
             processed_lines.append(cleaned_line)
+    elif is_state:
+        header_replaced = False
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("%%"):
+                processed_lines.append(line)
+                continue
+            if not header_replaced:
+                # Đảm bảo dòng đầu tiên luôn là stateDiagram-v2
+                processed_lines.append("stateDiagram-v2")
+                header_replaced = True
+            else:
+                processed_lines.append(_clean_state_line(line))
     else:
         processed_lines = lines
 

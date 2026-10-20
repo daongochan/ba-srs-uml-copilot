@@ -14,6 +14,7 @@ from src.models.srs_schema import SRSDocument
 from src.services.ai_generator import generate_srs_from_notes
 from src.data.sample_inputs import SAMPLE_SCENARIOS
 from src.validators.syntax_validator import clean_and_validate_mermaid, validate_sql_ddl
+from src.validators.db_sandbox import execute_and_audit_ddl
 
 # Thiết lập cấu hình trang Streamlit
 st.set_page_config(
@@ -216,6 +217,20 @@ def export_srs_markdown(doc: SRSDocument) -> str:
         doc.sequence_diagram_mermaid.strip(),
         "```",
         "",
+    ])
+
+    if doc.state_diagram_mermaid:
+        entity_title = f" - {doc.state_machine_entity}" if doc.state_machine_entity else ""
+        lines.extend([
+            f"## 5.1. Sơ đồ Máy Trạng thái Thực thể Cốt lõi (UML State Machine Diagram){entity_title}",
+            "",
+            "```mermaid",
+            doc.state_diagram_mermaid.strip(),
+            "```",
+            "",
+        ])
+
+    lines.extend([
         "## 6. Sơ đồ Thực thể Quan hệ Chuẩn 3NF (Mermaid ERD)",
         "",
         "```mermaid",
@@ -375,7 +390,7 @@ if doc:
 
     tab1, tab2, tab3, tab4 = st.tabs([
         "📋 Tab 1: Đặc tả Yêu cầu (SRS & User Stories)",
-        "🔄 Tab 2: Sơ đồ Tuần tự (UML Sequence Diagram)",
+        "🔄 Tab 2: Mô hình Động UML (Sequence & State Machine)",
         "🗄️ Tab 3: Thiết kế CSDL (ERD 3NF & SQL DDL)",
         "📥 Tab 4: Xuất Tài liệu (Export Markdown)",
     ])
@@ -480,7 +495,7 @@ if doc:
             ]
             st.dataframe(rtm_table, use_container_width=True, hide_index=True)
 
-    # ---------------- TAB 2: UML SEQUENCE DIAGRAM ----------------
+    # ---------------- TAB 2: UML DYNAMIC MODELS (SEQUENCE & STATE MACHINE) ----------------
     with tab2:
         st.markdown("#### 🔄 Sơ đồ Tuần tự Nghiệp vụ Trọng tâm (UML Sequence Diagram)")
         st.caption("Minh họa luồng tương tác giữa các tác nhân và thành phần hệ thống theo thời gian.")
@@ -489,6 +504,17 @@ if doc:
 
         with st.expander("📄 Xem mã nguồn Mermaid Sequence Diagram"):
             st.code(doc.sequence_diagram_mermaid, language="mermaid")
+
+        if doc.state_diagram_mermaid:
+            st.divider()
+            entity_label = f": {doc.state_machine_entity}" if doc.state_machine_entity else ""
+            st.markdown(f"#### 🚦 Sơ đồ Máy Trạng thái Thực thể Cốt lõi (UML State Machine Diagram){entity_label}")
+            st.caption("Mô hình hóa vòng đời trạng thái, sự kiện kích hoạt và điều kiện rẽ nhánh của thực thể trung tâm.")
+
+            render_mermaid(doc.state_diagram_mermaid, height=560, diagram_type="stateDiagram-v2")
+
+            with st.expander("📄 Xem mã nguồn Mermaid State Machine Diagram"):
+                st.code(doc.state_diagram_mermaid, language="mermaid")
 
     # ---------------- TAB 3: ERD 3NF & SQL DDL ----------------
     with tab3:
@@ -517,6 +543,41 @@ if doc:
                 st.warning(f"⚠️ Cảnh báo kiểm định SQL: {sql_validation_msg}")
 
             st.code(doc.sql_ddl_script, language="sql")
+
+        # Báo cáo Kiểm toán Thực thi Vật lý CSDL (In-Memory DB Sandbox Audit)
+        st.divider()
+        st.markdown("#### 🧪 Báo cáo Kiểm toán Thực thi Vật lý CSDL (In-Memory DB Sandbox Audit)")
+        st.caption("Khởi tạo và chạy thực tế toàn bộ câu lệnh DDL trên SQLite RAM Sandbox (:memory:) để kiểm tra tính khả thi vật lý và tính toàn vẹn khóa ngoại.")
+
+        db_audit = execute_and_audit_ddl(doc.sql_ddl_script)
+
+        audit_col1, audit_col2, audit_col3 = st.columns(3)
+        with audit_col1:
+            if db_audit["execution_success"]:
+                st.metric("⚙️ Khởi tạo Bảng trong RAM", "PASS (100%)", delta="Khả thi vật lý")
+            else:
+                st.metric("⚙️ Khởi tạo Bảng trong RAM", "FAIL", delta="Lỗi cú pháp DDL", delta_color="inverse")
+
+        with audit_col2:
+            st.metric("🗄️ Tổng số Bảng Vật lý", f"{db_audit['table_count']} Bảng", delta="Đã tạo thực tế")
+
+        with audit_col3:
+            st.metric("🔑 Ràng buộc Khóa ngoại (FK)", f"{db_audit['total_foreign_keys']} Khóa ngoại", delta="Quan hệ toàn vẹn")
+
+        if not db_audit["execution_success"]:
+            st.error(f"❌ Chi tiết sự cố thực thi Sandbox: {db_audit.get('error_message')}")
+        elif db_audit["tables_metadata"]:
+            tables_summary = [
+                {
+                    "Tên Bảng": meta["table_name"],
+                    "Số Cột": meta["column_count"],
+                    "Số Khóa Ngoại": meta["foreign_key_count"],
+                    "Bảng Cha Tham Chiếu": ", ".join(meta["referenced_tables"]) if meta["referenced_tables"] else "(Không có)",
+                    "Danh Sách Cột (Chi tiết)": ", ".join([f"{c['name']} ({c['type']}{' PK' if c['primary_key'] else ''})" for c in meta["columns"]]),
+                }
+                for meta in db_audit["tables_metadata"]
+            ]
+            st.dataframe(tables_summary, use_container_width=True, hide_index=True)
 
     # ---------------- TAB 4: EXPORT MARKDOWN ----------------
     with tab4:

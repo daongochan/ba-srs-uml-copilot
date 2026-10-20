@@ -5,6 +5,7 @@ from src.validators.syntax_validator import (
     clean_and_validate_mermaid,
     validate_sql_ddl,
 )
+from src.validators.db_sandbox import execute_and_audit_ddl
 from src.models.srs_schema import (
     TraceabilityItem,
     QualityAudit,
@@ -117,6 +118,24 @@ erDiagram
         assert "User->>Web: Đăng nhập" in cleaned
         assert "Web->>Server: Gửi (username, password)" in cleaned
         assert "Server->>DB: Truy vấn dữ liệu" in cleaned
+
+    def test_clean_state_diagram_v2_and_sanitization(self):
+        raw_code = """```mermaid
+stateDiagram
+    [*] --> Pending : Tạo đơn hàng;
+    Pending --> Paid : Thanh toán thành công;
+    Pending --> Cancelled : Hết hạn giữ chỗ (10 phút);
+    Paid --> [*] : Hoàn tất đơn hàng;
+```"""
+        cleaned = clean_and_validate_mermaid(raw_code, diagram_type="stateDiagram-v2")
+        assert cleaned.startswith("stateDiagram-v2")
+        assert "```" not in cleaned
+        assert "Pending --> Paid : Thanh toán thành công" in cleaned
+        assert "Pending --> Cancelled : Hết hạn giữ chỗ (10 phút)" in cleaned
+        for line in cleaned.splitlines():
+            stripped = line.strip()
+            if ":" in stripped and "-->" in stripped:
+                assert not stripped.endswith(";"), f"Dòng vẫn còn dấu chấm phẩy: {stripped}"
 
     def test_mermaid_with_leading_comments(self):
         raw_code = """%% This is a header comment
@@ -264,3 +283,60 @@ class TestRtmAndQualityAuditSchemas:
         assert doc.quality_audit is not None
         assert doc.quality_audit.ieee_compliance_score == 98
         assert "MoMo" in doc.quality_audit.clarification_questions[0]
+
+
+class TestDbSandbox:
+    """Test suite for in-memory SQLite DDL execution sandbox."""
+
+    def test_execute_and_audit_ddl_two_tables_with_foreign_key(self):
+        sql = """```sql
+CREATE TABLE departments (
+    dept_id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL
+);
+
+CREATE TABLE employees (
+    emp_id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    dept_id INT REFERENCES departments(dept_id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```"""
+        result = execute_and_audit_ddl(sql)
+        assert result["execution_success"] is True
+        assert result["table_count"] == 2
+        assert result["total_foreign_keys"] == 1
+        assert result["error_message"] is None
+        assert len(result["tables_metadata"]) == 2
+
+        dept_meta = next(t for t in result["tables_metadata"] if t["table_name"] == "departments")
+        assert dept_meta["column_count"] == 2
+        assert dept_meta["foreign_key_count"] == 0
+
+        emp_meta = next(t for t in result["tables_metadata"] if t["table_name"] == "employees")
+        assert emp_meta["column_count"] == 4
+        assert emp_meta["foreign_key_count"] == 1
+        assert emp_meta["referenced_tables"] == ["departments"]
+
+    def test_execute_and_audit_ddl_with_postgres_uuid_default(self):
+        sql = """
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email VARCHAR(255) NOT NULL UNIQUE
+);
+"""
+        result = execute_and_audit_ddl(sql)
+        assert result["execution_success"] is True
+        assert result["table_count"] == 1
+        assert result["total_foreign_keys"] == 0
+
+    def test_execute_and_audit_ddl_empty(self):
+        result = execute_and_audit_ddl("   ")
+        assert result["execution_success"] is False
+        assert result["table_count"] == 0
+        assert "trống" in result["error_message"].lower()
+
+    def test_execute_and_audit_ddl_syntax_error(self):
+        result = execute_and_audit_ddl("CREATE TABLE broken (id INT PRIMARY KEY, name VARCHAR(")
+        assert result["execution_success"] is False
+        assert result["error_message"] is not None
