@@ -139,7 +139,7 @@ Hãy phân tích nghiệp vụ, chuẩn hóa theo IEEE 29148 & BABOK, thiết k�
         pass
 
     try:
-        if doc.state_diagram_mermaid:
+        if getattr(doc, "state_diagram_mermaid", ""):
             doc.state_diagram_mermaid = clean_and_validate_mermaid(
                 doc.state_diagram_mermaid, diagram_type="stateDiagram-v2"
             )

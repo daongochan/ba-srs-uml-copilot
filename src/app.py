@@ -24,6 +24,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Tự động dọn dẹp session_state nếu đối tượng SRSDocument từ phiên cũ thiếu thuộc tính mới
+for ss_key in ["srs_result", "doc"]:
+    if ss_key in st.session_state and st.session_state[ss_key] is not None:
+        if not hasattr(st.session_state[ss_key], "state_diagram_mermaid"):
+            st.session_state.pop(ss_key, None)
+
 
 def render_mermaid(mermaid_code: str, height: int = 550, diagram_type: str = "") -> None:
     """Nhúng thư viện Mermaid.js từ CDN và render sơ đồ an toàn qua API mermaid.render()
@@ -219,13 +225,15 @@ def export_srs_markdown(doc: SRSDocument) -> str:
         "",
     ])
 
-    if doc.state_diagram_mermaid:
-        entity_title = f" - {doc.state_machine_entity}" if doc.state_machine_entity else ""
+    state_diagram = getattr(doc, "state_diagram_mermaid", "")
+    state_entity = getattr(doc, "state_machine_entity", "")
+    if state_diagram:
+        entity_title = f" - {state_entity}" if state_entity else ""
         lines.extend([
             f"## 5.1. Sơ đồ Máy Trạng thái Thực thể Cốt lõi (UML State Machine Diagram){entity_title}",
             "",
             "```mermaid",
-            doc.state_diagram_mermaid.strip(),
+            state_diagram.strip(),
             "```",
             "",
         ])
@@ -245,29 +253,31 @@ def export_srs_markdown(doc: SRSDocument) -> str:
         "",
     ])
 
-    if doc.traceability_matrix:
+    traceability_matrix = getattr(doc, "traceability_matrix", [])
+    if traceability_matrix:
         lines.extend([
             "## 8. Ma trận Truy vết Yêu cầu (Requirements Traceability Matrix - RTM)",
             "",
             "| Mã YC | Tên Tính năng | Quy tắc Nghiệp vụ (Business Rule) | Bảng CSDL Liên quan | Kịch bản Kiểm thử Nghiệm thu |",
             "| :--- | :--- | :--- | :--- | :--- |",
         ])
-        for item in doc.traceability_matrix:
+        for item in traceability_matrix:
             related = ", ".join(item.related_tables) if isinstance(item.related_tables, list) else str(item.related_tables)
             lines.append(f"| **{item.req_id}** | {item.feature_name} | {item.business_rule} | `{related}` | {item.test_scenario_summary} |")
         lines.append("")
 
-    if doc.quality_audit and doc.quality_audit.clarification_questions:
+    quality_audit = getattr(doc, "quality_audit", None)
+    if quality_audit and getattr(quality_audit, "clarification_questions", []):
         lines.extend([
             "## 9. Đánh giá Chất lượng Đặc tả & Điểm Cần Phỏng vấn Lại (Quality & Ambiguity Audit)",
             "",
-            f"- **Điểm Tuân thủ IEEE 29148:** `{doc.quality_audit.ieee_compliance_score}/100`",
-            f"- **Điểm Chuẩn User Story INVEST:** `{doc.quality_audit.invest_score}/100`",
+            f"- **Điểm Tuân thủ IEEE 29148:** `{getattr(quality_audit, 'ieee_compliance_score', 90)}/100`",
+            f"- **Điểm Chuẩn User Story INVEST:** `{getattr(quality_audit, 'invest_score', 90)}/100`",
             "",
             "### Câu hỏi Đào sâu Nghiệp vụ Cần Xác nhận lại với Stakeholders (Follow-up Questions):",
             "",
         ])
-        for q_idx, q in enumerate(doc.quality_audit.clarification_questions, start=1):
+        for q_idx, q in enumerate(quality_audit.clarification_questions, start=1):
             lines.append(f"{q_idx}. {q}")
         lines.append("")
 
@@ -345,6 +355,10 @@ if "raw_notes_input" not in st.session_state:
 
 if "srs_result" not in st.session_state:
     st.session_state["srs_result"] = None
+else:
+    cached_doc = st.session_state.get("srs_result")
+    if cached_doc is not None and not hasattr(cached_doc, "state_diagram_mermaid"):
+        st.session_state["srs_result"] = None
 
 meeting_notes_text = st.text_area(
     "Nội dung Biên bản Ghi chú Họp Khách hàng (Raw Meeting Notes):",
@@ -383,6 +397,9 @@ if generate_clicked:
 # HIỂN THỊ KẾT QUẢ TRÊN 4 TABS
 # -------------------------------------------------------------
 doc: SRSDocument = st.session_state.get("srs_result")
+if doc is not None and not hasattr(doc, "state_diagram_mermaid"):
+    st.session_state["srs_result"] = None
+    doc = None
 
 if doc:
     st.markdown("---")
@@ -398,8 +415,9 @@ if doc:
     # ---------------- TAB 1: SRS & USER STORIES ----------------
     with tab1:
         # Thẻ chỉ số chất lượng & kiểm toán (Quality Audit Metrics)
-        ieee_score = doc.quality_audit.ieee_compliance_score if doc.quality_audit else 95
-        invest_score = doc.quality_audit.invest_score if doc.quality_audit else 90
+        quality_audit = getattr(doc, "quality_audit", None)
+        ieee_score = getattr(quality_audit, "ieee_compliance_score", 95) if quality_audit else 95
+        invest_score = getattr(quality_audit, "invest_score", 90) if quality_audit else 90
         fr_count = len(doc.functional_requirements)
 
         metric_col1, metric_col2, metric_col3 = st.columns(3)
@@ -423,11 +441,11 @@ if doc:
             )
 
         # Cảnh báo Điểm Mơ hồ & Câu hỏi Phỏng vấn lại Khách hàng
-        if doc.quality_audit and doc.quality_audit.clarification_questions:
+        if quality_audit and getattr(quality_audit, "clarification_questions", []):
             st.markdown("#### ❓ Cảnh báo Điểm Mơ hồ & Câu hỏi Phỏng vấn lại Khách hàng (Elicitation Follow-up Questions)")
             with st.container(border=True):
                 st.warning("⚠️ **Phân tích Rủi ro & Điểm Mơ hồ Nghiệp vụ:** Dựa trên biên bản họp thô, AI Business Analyst phát hiện các khoảng trống thông tin cần phỏng vấn xác nhận lại với Stakeholders để tránh rủi ro phát sinh phạm vi (Scope Creep):")
-                for q_idx, question in enumerate(doc.quality_audit.clarification_questions, start=1):
+                for q_idx, question in enumerate(quality_audit.clarification_questions, start=1):
                     st.markdown(f"**{q_idx}.** {question}")
 
         st.markdown("#### 🎯 Mục tiêu Kinh doanh (Business Objective)")
@@ -480,7 +498,8 @@ if doc:
         st.table(nfr_data)
 
         # Ma trận Truy vết Yêu cầu (Requirements Traceability Matrix - RTM)
-        if doc.traceability_matrix:
+        traceability_matrix = getattr(doc, "traceability_matrix", [])
+        if traceability_matrix:
             st.markdown("#### 🔗 Ma trận Truy vết Yêu cầu (Requirements Traceability Matrix - RTM)")
             st.caption("Chuỗi giá trị truy vết theo chuẩn BABOK v3: Mã YC ➔ Tính năng ➔ Quy tắc Nghiệp vụ ➔ Bảng CSDL Liên quan ➔ Kịch bản Kiểm thử Nghiệm thu.")
             rtm_table = [
@@ -491,7 +510,7 @@ if doc:
                     "Bảng CSDL Liên quan": ", ".join(item.related_tables) if isinstance(item.related_tables, list) else str(item.related_tables),
                     "Kịch bản Kiểm thử Nghiệm thu": item.test_scenario_summary,
                 }
-                for item in doc.traceability_matrix
+                for item in traceability_matrix
             ]
             st.dataframe(rtm_table, use_container_width=True, hide_index=True)
 
@@ -505,16 +524,18 @@ if doc:
         with st.expander("📄 Xem mã nguồn Mermaid Sequence Diagram"):
             st.code(doc.sequence_diagram_mermaid, language="mermaid")
 
-        if doc.state_diagram_mermaid:
+        state_diagram = getattr(doc, "state_diagram_mermaid", "")
+        state_entity = getattr(doc, "state_machine_entity", "")
+        if state_diagram:
             st.divider()
-            entity_label = f": {doc.state_machine_entity}" if doc.state_machine_entity else ""
+            entity_label = f": {state_entity}" if state_entity else ""
             st.markdown(f"#### 🚦 Sơ đồ Máy Trạng thái Thực thể Cốt lõi (UML State Machine Diagram){entity_label}")
             st.caption("Mô hình hóa vòng đời trạng thái, sự kiện kích hoạt và điều kiện rẽ nhánh của thực thể trung tâm.")
 
-            render_mermaid(doc.state_diagram_mermaid, height=560, diagram_type="stateDiagram-v2")
+            render_mermaid(state_diagram, height=560, diagram_type="stateDiagram-v2")
 
             with st.expander("📄 Xem mã nguồn Mermaid State Machine Diagram"):
-                st.code(doc.state_diagram_mermaid, language="mermaid")
+                st.code(state_diagram, language="mermaid")
 
     # ---------------- TAB 3: ERD 3NF & SQL DDL ----------------
     with tab3:
@@ -528,9 +549,10 @@ if doc:
             with st.expander("📄 Xem mã nguồn Mermaid ERD"):
                 st.code(doc.er_diagram_mermaid, language="mermaid")
 
-            if doc.quality_audit and doc.quality_audit.third_nf_justification:
+            quality_audit = getattr(doc, "quality_audit", None)
+            if quality_audit and getattr(quality_audit, "third_nf_justification", ""):
                 with st.expander("🏛️ Giải trình Thiết kế CSDL Đạt Chuẩn 3NF (3NF Justification)", expanded=False):
-                    st.info(doc.quality_audit.third_nf_justification)
+                    st.info(quality_audit.third_nf_justification)
 
         with col_sql:
             st.markdown("#### 💾 Kịch bản Khởi tạo CSDL (SQL DDL)")

@@ -57,3 +57,24 @@ def test_export_srs_markdown_contains_all_sections():
     assert "erDiagram" in md
     assert "## 7. Kịch bản Khởi tạo Cơ sở Dữ liệu (SQL DDL Script - PostgreSQL)" in md
     assert "CREATE TABLE users" in md
+
+
+def test_export_srs_markdown_backward_compatible_without_state_machine():
+    """Verify export_srs_markdown gracefully handles legacy documents missing new fields."""
+    class LegacySRSDocument:
+        project_title = "Legacy System"
+        business_objective = "Legacy Objective"
+        actors = ["Admin"]
+        functional_requirements = []
+        non_functional_requirements = []
+        sequence_diagram_mermaid = "sequenceDiagram\n  A->>B: Ping"
+        er_diagram_mermaid = "erDiagram\n  A ||--o{ B : rel"
+        sql_ddl_script = "CREATE TABLE a (id INT);"
+        # Deliberately missing: state_diagram_mermaid, state_machine_entity, traceability_matrix, quality_audit
+
+    legacy_doc = LegacySRSDocument()
+    # Must not raise AttributeError
+    md = export_srs_markdown(legacy_doc)  # type: ignore[arg-type]
+    assert "# Legacy System" in md
+    assert "5.1. Sơ đồ Máy Trạng thái" not in md
+
