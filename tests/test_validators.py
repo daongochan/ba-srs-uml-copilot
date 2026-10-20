@@ -340,3 +340,29 @@ CREATE TABLE users (
         result = execute_and_audit_ddl("CREATE TABLE broken (id INT PRIMARY KEY, name VARCHAR(")
         assert result["execution_success"] is False
         assert result["error_message"] is not None
+
+    def test_execute_and_audit_ddl_with_postgres_index_nulls_last(self):
+        """Verify executing SQL containing Postgres-specific NULLS LAST and USING BTREE indexes succeeds."""
+        sql = """
+CREATE TABLE customers (
+    customer_id SERIAL PRIMARY KEY,
+    full_name VARCHAR(150) NOT NULL
+);
+
+CREATE TABLE bookings (
+    booking_id SERIAL PRIMARY KEY,
+    customer_id INT NOT NULL REFERENCES customers(customer_id),
+    total_amount NUMERIC(10, 2) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_bookings_created ON bookings (created_at DESC NULLS LAST);
+CREATE INDEX CONCURRENTLY idx_bookings_customer ON bookings USING BTREE (customer_id);
+"""
+        result = execute_and_audit_ddl(sql)
+        assert result["execution_success"] is True
+        assert result["table_count"] == 2
+        assert result["total_foreign_keys"] == 1
+        assert result["error_message"] is None
+        assert len(result["tables_metadata"]) == 2
+
