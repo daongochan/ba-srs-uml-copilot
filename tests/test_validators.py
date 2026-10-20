@@ -6,11 +6,16 @@ from src.validators.syntax_validator import (
     validate_sql_ddl,
 )
 from src.validators.db_sandbox import execute_and_audit_ddl
+from src.validators.requirements_linter import evaluate_srs_deterministically
 from src.models.srs_schema import (
+    AcceptanceCriterion,
+    FunctionalRequirement,
+    NonFunctionalRequirement,
     TraceabilityItem,
     QualityAudit,
     SRSDocument,
 )
+
 
 
 class TestMermaidValidator:
@@ -365,4 +370,275 @@ CREATE INDEX CONCURRENTLY idx_bookings_customer ON bookings USING BTREE (custome
         assert result["total_foreign_keys"] == 1
         assert result["error_message"] is None
         assert len(result["tables_metadata"]) == 2
+
+
+class TestRequirementsLinter:
+    """Test suite for deterministic IEEE 29148 and INVEST requirements linter."""
+
+    def test_evaluate_srs_deterministically_perfect_document(self):
+        """Xác nhận tài liệu SRS chuẩn mực đạt 100 điểm IEEE, 100 điểm INVEST và 100% độ phủ RTM."""
+        doc = SRSDocument(
+            project_title="CineMax Online Booking System",
+            business_objective="Xây dựng nền tảng đặt vé trực tuyến giúp tăng 30% doanh thu và loại bỏ trùng ghế.",
+            actors=["Khách hàng", "Quản trị viên"],
+            functional_requirements=[
+                FunctionalRequirement(
+                    req_id="FR-01",
+                    title="Đặt vé xem phim trực tuyến",
+                    user_story="Là một khách hàng, tôi muốn đặt vé xem phim trực tuyến để tiết kiệm thời gian chờ đợi tại quầy.",
+                    priority="High",
+                    acceptance_criteria=[
+                        AcceptanceCriterion(
+                            given="Khách hàng đã đăng nhập và đang xem lịch chiếu phim còn ghế trống",
+                            when="Khách hàng chọn ghế A1 và bấm nút xác nhận thanh toán",
+                            then="Hệ thống tạo mã đơn hàng duy nhất và giữ chỗ thành công trong 10 phút.",
+                        )
+                    ],
+                ),
+                FunctionalRequirement(
+                    req_id="FR-02",
+                    title="Quản lý suất chiếu",
+                    user_story="As an administrator, I want to create new movie showtimes so that customers can book tickets.",
+                    priority="Medium",
+                    acceptance_criteria=[
+                        AcceptanceCriterion(
+                            given="Quản trị viên đã đăng nhập trang quản trị rạp chiếu phim",
+                            when="Quản trị viên nhập thông tin phòng chiếu và thời gian bắt đầu",
+                            then="Hệ thống lưu suất chiếu mới vào cơ sở dữ liệu và hiển thị lên lịch chiếu.",
+                        )
+                    ],
+                ),
+            ],
+            non_functional_requirements=[
+                NonFunctionalRequirement(
+                    category="Performance",
+                    description="Thời gian phản hồi API tra cứu trạng thái ghế",
+                    metric="Thời gian phản hồi trung bình < 250ms cho 99% các yêu cầu đồng thời.",
+                ),
+                NonFunctionalRequirement(
+                    category="Scalability",
+                    description="Khả năng chịu tải đồng thời trong giờ cao điểm",
+                    metric="Đáp ứng tối thiểu 3000 người dùng truy cập và đặt chỗ đồng thời.",
+                ),
+            ],
+            sequence_diagram_mermaid="""sequenceDiagram
+    actor U as "Khách hàng"
+    participant S as "Hệ thống"
+    U->>S: Đặt vé
+    S-->>U: Xác nhận""",
+            er_diagram_mermaid="""erDiagram
+    BOOKINGS {
+        int id PK
+        varchar code
+    }""",
+            sql_ddl_script="CREATE TABLE bookings (id INT PRIMARY KEY, code VARCHAR(50));",
+            traceability_matrix=[
+                TraceabilityItem(
+                    req_id="FR-01",
+                    feature_name="Đặt vé xem phim",
+                    business_rule="Ghế phải ở trạng thái trống trước khi khóa ghế tạm thời",
+                    related_tables=["bookings"],
+                    test_scenario_summary="Kiểm thử luồng giữ chỗ thành công khi chọn ghế còn trống",
+                ),
+                TraceabilityItem(
+                    req_id="FR-02",
+                    feature_name="Quản lý suất chiếu",
+                    business_rule="Phòng chiếu không được trùng lịch chiếu cùng khung giờ",
+                    related_tables=["showtimes"],
+                    test_scenario_summary="Kiểm thử tạo suất chiếu mới và kiểm tra xung đột phòng chiếu",
+                ),
+            ],
+            quality_audit=QualityAudit(ieee_compliance_score=95, invest_score=90),
+        )
+
+        result = evaluate_srs_deterministically(doc)
+
+        assert result["deterministic_ieee_score"] == 100
+        assert result["deterministic_invest_score"] == 100
+        assert result["rtm_coverage_pct"] == 100.0
+        assert len(result["lint_warnings"]) == 0
+        assert result["stats"]["weasel_count"] == 0
+        assert result["stats"]["unquantified_nfr_count"] == 0
+
+    def test_evaluate_srs_deterministically_with_weasel_words_and_unquantified_nfr(self):
+        """Xác nhận điểm bị trừ chính xác và lint_warnings bắt đúng lỗi khi có từ ngữ mơ hồ 'nhanh chóng' và NFR thiếu số liệu."""
+        doc = SRSDocument(
+            project_title="CineMax Online Booking System",
+            business_objective="Xây dựng nền tảng đặt vé trực tuyến.",
+            actors=["Khách hàng"],
+            functional_requirements=[
+                FunctionalRequirement(
+                    req_id="FR-01",
+                    title="Đặt vé xem phim trực tuyến",
+                    user_story="Là một khách hàng, tôi muốn đặt vé nhanh chóng để tiết kiệm thời gian chờ đợi.",
+                    priority="High",
+                    acceptance_criteria=[
+                        AcceptanceCriterion(
+                            given="Khách hàng đã đăng nhập và đang xem lịch chiếu phim còn ghế",
+                            when="Khách hàng chọn ghế A1 và xác nhận thanh toán",
+                            then="Hệ thống tạo mã đơn hàng duy nhất và giữ chỗ thành công trong 10 phút.",
+                        )
+                    ],
+                )
+            ],
+            non_functional_requirements=[
+                NonFunctionalRequirement(
+                    category="Performance",
+                    description="Hệ thống phải hoạt động mượt mà và ổn định",
+                    metric="Phản hồi mượt mà không bị gián đoạn",  # Thiếu số liệu định lượng (không có \d+)
+                )
+            ],
+            sequence_diagram_mermaid="""sequenceDiagram
+    actor U as "Khách hàng"
+    participant S as "Hệ thống"
+    U->>S: Đặt vé
+    S-->>U: Xác nhận""",
+            er_diagram_mermaid="""erDiagram
+    BOOKINGS {
+        int id PK
+    }""",
+            sql_ddl_script="CREATE TABLE bookings (id INT PRIMARY KEY);",
+            traceability_matrix=[
+                TraceabilityItem(
+                    req_id="FR-01",
+                    feature_name="Đặt vé xem phim",
+                    business_rule="Ghế phải ở trạng thái trống",
+                    related_tables=["bookings"],
+                    test_scenario_summary="Kiểm thử giữ chỗ thành công",
+                )
+            ],
+        )
+
+        result = evaluate_srs_deterministically(doc)
+
+        # 1 weasel word (-5 IEEE, -5 INVEST)
+        # 1 unquantified NFR (-10 IEEE, 0 INVEST)
+        # RTM coverage = 100.0% (0 deduction)
+        assert result["deterministic_ieee_score"] == 85  # 100 - 5 - 10 = 85
+        assert result["deterministic_invest_score"] == 95  # 100 - 5 = 95
+        assert result["rtm_coverage_pct"] == 100.0
+
+        # Kiểm tra lint_warnings bắt đúng 2 cảnh báo cụ thể
+        assert len(result["lint_warnings"]) == 2
+        assert any("nhanh chóng" in w for w in result["lint_warnings"])
+        assert any("FR-01" in w for w in result["lint_warnings"])
+        assert any("định lượng" in w or "Performance" in w for w in result["lint_warnings"])
+        assert result["stats"]["weasel_count"] == 1
+        assert result["stats"]["unquantified_nfr_count"] == 1
+
+    def test_evaluate_srs_deterministically_invalid_story_format_and_short_then(self):
+        """Kiểm tra phát hiện lỗi cú pháp User Story và mệnh đề Then quá ngắn (< 15 ký tự)."""
+        doc = SRSDocument(
+            project_title="Test App",
+            business_objective="Kiểm tra phát hiện lỗi cú pháp.",
+            actors=["Người dùng"],
+            functional_requirements=[
+                FunctionalRequirement(
+                    req_id="FR-01",
+                    title="Chức năng không chuẩn",
+                    user_story="Người dùng muốn hủy đơn hàng trực tiếp.",  # Không đúng cấu trúc Là một... tôi muốn... để...
+                    priority="Medium",
+                    acceptance_criteria=[
+                        AcceptanceCriterion(
+                            given="Đơn hàng đang chờ xử lý",
+                            when="Bấm nút hủy",
+                            then="Đã hủy đơn.",  # Quá ngắn: 12 ký tự < 15 ký tự tối thiểu
+                        )
+                    ],
+                )
+            ],
+            non_functional_requirements=[
+                NonFunctionalRequirement(
+                    category="Security",
+                    description="Mã hóa mật khẩu bằng bcrypt",
+                    metric="100% mật khẩu được băm an toàn.",
+                )
+            ],
+            sequence_diagram_mermaid="sequenceDiagram\n    actor U as \"U\"\n    U->>S: req",
+            er_diagram_mermaid="erDiagram\n    T { int id PK }",
+            sql_ddl_script="CREATE TABLE t (id INT PRIMARY KEY);",
+            traceability_matrix=[
+                TraceabilityItem(
+                    req_id="FR-01",
+                    feature_name="Hủy đơn",
+                    business_rule="Chỉ hủy khi đơn chưa xuất kho",
+                    related_tables=["t"],
+                    test_scenario_summary="Kiểm thử hủy đơn hàng",
+                )
+            ],
+        )
+
+        result = evaluate_srs_deterministically(doc)
+
+        assert any("cấu trúc chuẩn" in w for w in result["lint_warnings"])
+        assert any("Then" in w and "quá ngắn" in w for w in result["lint_warnings"])
+        assert result["deterministic_invest_score"] < 90
+
+    def test_evaluate_srs_deterministically_missing_rtm_coverage(self):
+        """Kiểm tra phát hiện thiếu ánh xạ trong Ma trận Truy vết RTM."""
+        doc = SRSDocument(
+            project_title="Test RTM Coverage",
+            business_objective="Kiểm tra RTM coverage.",
+            actors=["Khách hàng"],
+            functional_requirements=[
+                FunctionalRequirement(
+                    req_id="FR-01",
+                    title="Tính năng 1",
+                    user_story="Là một khách hàng, tôi muốn thanh toán trực tuyến để nhận vé ngay lập tức.",
+                    priority="High",
+                    acceptance_criteria=[
+                        AcceptanceCriterion(
+                            given="Đã chọn ghế và chuyển sang cổng thanh toán",
+                            when="Thanh toán thành công",
+                            then="Hệ thống xác nhận giao dịch thành công và gửi vé qua email.",
+                        )
+                    ],
+                ),
+                FunctionalRequirement(
+                    req_id="FR-02",
+                    title="Tính năng 2",
+                    user_story="Là một khách hàng, tôi muốn hủy vé xem phim để nhận lại tiền hoàn vé.",
+                    priority="Low",
+                    acceptance_criteria=[
+                        AcceptanceCriterion(
+                            given="Vé chưa đến giờ chiếu tối thiểu 2 tiếng",
+                            when="Bấm yêu cầu hoàn vé",
+                            then="Hệ thống hủy vé và hoàn tiền theo chính sách hoàn trả rạp.",
+                        )
+                    ],
+                ),
+            ],
+            non_functional_requirements=[
+                NonFunctionalRequirement(
+                    category="Availability",
+                    description="Độ sẵn sàng của hệ thống",
+                    metric="Uptime đạt 99.9% hàng tháng.",
+                )
+            ],
+            sequence_diagram_mermaid="sequenceDiagram\n    actor U as \"U\"\n    U->>S: req",
+            er_diagram_mermaid="erDiagram\n    T { int id PK }",
+            sql_ddl_script="CREATE TABLE t (id INT PRIMARY KEY);",
+            traceability_matrix=[
+                # Chỉ có FR-01, thiếu FR-02 -> Coverage = 50.0%
+                TraceabilityItem(
+                    req_id="FR-01",
+                    feature_name="Thanh toán trực tuyến",
+                    business_rule="Xác thực thanh toán qua cổng",
+                    related_tables=["t"],
+                    test_scenario_summary="Kiểm thử thanh toán",
+                )
+            ],
+        )
+
+        result = evaluate_srs_deterministically(doc)
+
+        assert result["rtm_coverage_pct"] == 50.0
+        assert any("FR-02" in w and "Ma trận Truy vết" in w for w in result["lint_warnings"])
+        assert result["deterministic_ieee_score"] < 100
+
+    def test_evaluate_srs_deterministically_none_raises_error(self):
+        """Xác nhận evaluate_srs_deterministically raise ValueError nếu doc là None."""
+        with pytest.raises(ValueError, match="không được để trống"):
+            evaluate_srs_deterministically(None)
+
 

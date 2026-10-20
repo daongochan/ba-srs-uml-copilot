@@ -20,6 +20,9 @@ from src.services.exporter import (
 from src.data.sample_inputs import SAMPLE_SCENARIOS
 from src.validators.syntax_validator import clean_and_validate_mermaid, validate_sql_ddl
 from src.validators.db_sandbox import execute_and_audit_ddl
+from src.validators.requirements_linter import evaluate_srs_deterministically
+
+
 
 # Tương thích ngược với các module và test
 export_srs_markdown = generate_markdown_report
@@ -328,18 +331,28 @@ if doc:
         invest_score = getattr(quality_audit, "invest_score", 90) if quality_audit else 90
         fr_count = len(doc.functional_requirements)
 
+        # Chạy Bộ Kiểm định Cú pháp Xác định (Deterministic Static Linter)
+        linter_result = evaluate_srs_deterministically(doc)
+        det_ieee_score = linter_result["deterministic_ieee_score"]
+        det_invest_score = linter_result["deterministic_invest_score"]
+        rtm_coverage_pct = linter_result["rtm_coverage_pct"]
+        lint_warnings = linter_result["lint_warnings"]
+
+        st.markdown("##### 📊 Đánh giá Chất lượng Đặc tả: AI vs Thuật toán Kiểm định Xác định")
+        
+        # Hàng 1: Đánh giá cảm tính từ AI
         metric_col1, metric_col2, metric_col3 = st.columns(3)
         with metric_col1:
             st.metric(
-                label="📋 Điểm Tuân thủ IEEE 29148",
+                label="🤖 Điểm Tuân thủ IEEE 29148 (AI)",
                 value=f"{ieee_score}/100",
-                delta="Chuẩn Đặc tả Quốc tế",
+                delta="Cảm tính AI",
             )
         with metric_col2:
             st.metric(
-                label="🎯 Điểm User Story INVEST",
+                label="🤖 Điểm User Story INVEST (AI)",
                 value=f"{invest_score}/100",
-                delta="Chuẩn Agile / Scrum",
+                delta="Cảm tính AI",
             )
         with metric_col3:
             st.metric(
@@ -347,6 +360,42 @@ if doc:
                 value=f"{fr_count} Yêu cầu",
                 delta="Đã cấu trúc hóa",
             )
+
+        # Hàng 2: Bộ Chấm điểm & Kiểm định Yêu cầu Xác định (Deterministic Linter)
+        det_col1, det_col2, det_col3 = st.columns(3)
+        with det_col1:
+            delta_ieee = det_ieee_score - ieee_score
+            st.metric(
+                label="Điểm IEEE 29148 (Deterministic Linter)",
+                value=f"{det_ieee_score}/100",
+                delta=f"{delta_ieee:+d} so với AI" if delta_ieee != 0 else "Khớp với AI",
+                delta_color="normal" if det_ieee_score >= 80 else "inverse",
+            )
+        with det_col2:
+            delta_invest = det_invest_score - invest_score
+            st.metric(
+                label="Điểm INVEST (Rule-based)",
+                value=f"{det_invest_score}/100",
+                delta=f"{delta_invest:+d} so với AI" if delta_invest != 0 else "Khớp với AI",
+                delta_color="normal" if det_invest_score >= 80 else "inverse",
+            )
+        with det_col3:
+            st.metric(
+                label="Độ phủ Truy vết RTM (%)",
+                value=f"{rtm_coverage_pct}%",
+                delta="100% Hoàn chỉnh" if rtm_coverage_pct == 100.0 else f"Thiếu {100.0 - rtm_coverage_pct:.1f}%",
+                delta_color="normal" if rtm_coverage_pct == 100.0 else "inverse",
+            )
+
+        # Báo cáo Kiểm toán Cú pháp & Ngữ nghĩa
+        if lint_warnings:
+            with st.expander("🔍 Báo cáo Kiểm toán Tự động Cú pháp Yêu cầu (Automated Static Linter Report)", expanded=True):
+                st.warning(f"⚠️ Phát hiện {len(lint_warnings)} cảnh báo chất lượng cần chuẩn hóa cú pháp theo chuẩn IEEE 29148 & INVEST:")
+                for w_idx, warning_text in enumerate(lint_warnings, start=1):
+                    st.markdown(f"**{w_idx}.** {warning_text}")
+        else:
+            st.success("100% Yêu cầu vượt qua bài kiểm tra từ ngữ mơ hồ và định lượng SLA chuẩn IEEE 29148.")
+
 
         # Cảnh báo Điểm Mơ hồ & Câu hỏi Phỏng vấn lại Khách hàng
         if quality_audit and getattr(quality_audit, "clarification_questions", []):
