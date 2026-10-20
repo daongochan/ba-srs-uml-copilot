@@ -1,0 +1,377 @@
+"""Streamlit Web Application: AI Business Analyst & System Architect Copilot."""
+
+import os
+import re
+import streamlit as st
+import streamlit.components.v1 as components
+from dotenv import load_dotenv
+
+# Nạp biến môi trường từ file .env nếu có
+load_dotenv()
+
+from src.models.srs_schema import SRSDocument
+from src.services.ai_generator import generate_srs_from_notes
+from src.data.sample_inputs import SAMPLE_SCENARIOS
+from src.validators.syntax_validator import clean_and_validate_mermaid, validate_sql_ddl
+
+# Thiết lập cấu hình trang Streamlit
+st.set_page_config(
+    page_title="AI BA & System Architect Copilot",
+    page_icon="📐",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+
+def render_mermaid(mermaid_code: str, height: int = 550) -> None:
+    """Nhúng thư viện Mermaid.js từ CDN và render sơ đồ trực tiếp."""
+    try:
+        clean_code = clean_and_validate_mermaid(mermaid_code)
+    except Exception:
+        clean_code = mermaid_code.strip()
+
+    # Escape HTML special chars if any, but keep newline/quotes intact for mermaid parser
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+        <meta charset="utf-8">
+        <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+        <script>
+            mermaid.initialize({{
+                startOnLoad: true,
+                theme: 'neutral',
+                themeVariables: {{
+                    fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+                    fontSize: '14px',
+                    primaryColor: '#e0f2fe',
+                    primaryBorderColor: '#0284c7',
+                    lineColor: '#334155',
+                    secondaryColor: '#f8fafc',
+                    tertiaryColor: '#f1f5f9'
+                }},
+                securityLevel: 'loose'
+            }});
+        </script>
+        <style>
+            body {{
+                margin: 0;
+                padding: 16px;
+                background-color: #ffffff;
+                font-family: 'Inter', system-ui, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: flex-start;
+            }}
+            .mermaid {{
+                width: 100%;
+                text-align: center;
+            }}
+            .mermaid svg {{
+                max-width: 100%;
+                height: auto;
+                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+                border-radius: 8px;
+                padding: 12px;
+                background: #ffffff;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="mermaid">
+{clean_code}
+        </div>
+    </body>
+    </html>
+    """
+    components.html(html_content, height=height, scrolling=True)
+
+
+def export_srs_markdown(doc: SRSDocument) -> str:
+    """Chuyển đổi đối tượng SRSDocument thành văn bản Markdown chuẩn IEEE 29148."""
+    lines = [
+        f"# {doc.project_title}",
+        "",
+        "> **Tài liệu Đặc tả Yêu cầu Phần mềm (SRS) & Kiến trúc Hệ thống**",
+        "> Tuân thủ chuẩn IEEE 29148, BABOK Guide v3, ISO/IEC 25010 & Third Normal Form (3NF).",
+        "",
+        "---",
+        "",
+        "## 1. Mục tiêu Kinh doanh & Phạm vi Hệ thống (Business Objective)",
+        f"{doc.business_objective}",
+        "",
+        "## 2. Danh sách Tác nhân Tham gia (Actors)",
+    ]
+    for actor in doc.actors:
+        lines.append(f"- **{actor}**")
+    lines.extend(["", "## 3. Đặc tả Yêu cầu Chức năng (Functional Requirements)", ""])
+
+    for fr in doc.functional_requirements:
+        lines.append(f"### {fr.req_id}: {fr.title}")
+        lines.append(f"- **Độ ưu tiên:** `{fr.priority}`")
+        lines.append(f"- **User Story:** *{fr.user_story}*")
+        lines.append("")
+        lines.append("#### Tiêu chí Chấp nhận (Acceptance Criteria - Gherkin BDD):")
+        for idx, ac in enumerate(fr.acceptance_criteria, start=1):
+            lines.append(f"**Kịch bản {idx}:**")
+            lines.append(f"- **Given:** {ac.given}")
+            lines.append(f"- **When:** {ac.when}")
+            lines.append(f"- **Then:** {ac.then}")
+            lines.append("")
+
+    lines.extend(["## 4. Đặc tả Yêu cầu Phi Chức năng (Non-Functional Requirements)", ""])
+    lines.append("| Phân loại | Mô tả yêu cầu (IEEE 29148) | Chỉ số đo lường (Metric / SLA) |")
+    lines.append("| :--- | :--- | :--- |")
+    for nfr in doc.non_functional_requirements:
+        lines.append(f"| **{nfr.category}** | {nfr.description} | `{nfr.metric}` |")
+    lines.append("")
+
+    lines.extend([
+        "## 5. Sơ đồ Tuần tự Nghiệp vụ Trọng tâm (UML Sequence Diagram)",
+        "",
+        "```mermaid",
+        doc.sequence_diagram_mermaid.strip(),
+        "```",
+        "",
+        "## 6. Sơ đồ Thực thể Quan hệ Chuẩn 3NF (Mermaid ERD)",
+        "",
+        "```mermaid",
+        doc.er_diagram_mermaid.strip(),
+        "```",
+        "",
+        "## 7. Kịch bản Khởi tạo Cơ sở Dữ liệu (SQL DDL Script - PostgreSQL)",
+        "",
+        "```sql",
+        doc.sql_ddl_script.strip(),
+        "```",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+# -------------------------------------------------------------
+# SIDEBAR
+# -------------------------------------------------------------
+with st.sidebar:
+    st.image("https://img.icons8.com/isometric/100/blueprint.png", width=70)
+    st.title("Thiết lập Copilot")
+    st.caption("AI Business Analyst & Solution Architect")
+
+    # Đọc API key từ môi trường hoặc cho phép nhập
+    env_key = os.getenv("GEMINI_API_KEY", "")
+    api_key_input = st.text_input(
+        "Google Gemini API Key:",
+        value=env_key,
+        type="password",
+        placeholder="AIzaSy...",
+        help="Lấy API Key miễn phí tại https://aistudio.google.com/",
+    )
+    api_key = api_key_input.strip() if api_key_input else env_key
+
+    if api_key:
+        st.success("✅ Đã kết nối API Key", icon="🔑")
+    else:
+        st.warning("⚠️ Chưa cấu hình GEMINI_API_KEY", icon="⚡")
+
+    st.divider()
+
+    st.subheader("📚 Kịch bản Mẫu Khảo sát")
+    scenario_options = {
+        "custom": "-- Tự nhập ghi chú họp thực tế --",
+        "cinema_booking": "🎬 1. Rạp chiếu phim CineMax (Khóa ghế, Đặt vé)",
+        "bus_logistics": "🚌 2. Xe khách Phương Nam (Lịch chạy, Gửi hàng)",
+        "warehouse_inventory": "📦 3. Kho thông minh LogiTech (WMS, FIFO, Tồn kho)",
+    }
+
+    selected_scenario = st.selectbox(
+        "Chọn kịch bản nạp nhanh:",
+        options=list(scenario_options.keys()),
+        format_func=lambda k: scenario_options[k],
+    )
+
+    if selected_scenario != "custom" and selected_scenario in SAMPLE_SCENARIOS:
+        sample_data = SAMPLE_SCENARIOS[selected_scenario]
+        if st.button("📥 Nạp kịch bản này vào khung nhập", use_container_width=True):
+            st.session_state["raw_notes_input"] = sample_data["meeting_notes"]
+            st.rerun()
+
+    st.divider()
+    st.markdown("""
+    **Bộ tiêu chuẩn áp dụng:**
+    - 📋 **IEEE 29148:** Requirements Engineering
+    - 🏛️ **BABOK v3:** Business Analysis Body of Knowledge
+    - 🔄 **Gherkin BDD:** Given - When - Then
+    - 🗄️ **3NF:** Third Normal Form (Boyce-Codd)
+    - ⚡ **Model:** `gemini-2.5-flash`
+    """)
+
+# -------------------------------------------------------------
+# MAIN CONTENT AREA
+# -------------------------------------------------------------
+st.title("📐 BA & System Architect Copilot")
+st.markdown(
+    "Tự động hóa chuyển đổi **Biên bản họp khách hàng thô (Meeting Notes)** thành "
+    "**Đặc tả SRS chuẩn IEEE 29148**, **Sơ đồ UML Sequence**, **ERD Chuẩn 3NF** và **Mã SQL DDL**."
+)
+
+# Khởi tạo session state cho input và output
+if "raw_notes_input" not in st.session_state:
+    st.session_state["raw_notes_input"] = SAMPLE_SCENARIOS["cinema_booking"]["meeting_notes"]
+
+if "srs_result" not in st.session_state:
+    st.session_state["srs_result"] = None
+
+meeting_notes_text = st.text_area(
+    "Nội dung Biên bản Ghi chú Họp Khách hàng (Raw Meeting Notes):",
+    value=st.session_state["raw_notes_input"],
+    height=240,
+    placeholder="Dán nội dung thảo luận với khách hàng, yêu cầu nghiệp vụ, quy trình hoạt động...",
+)
+
+col_btn, col_info = st.columns([1, 3])
+with col_btn:
+    generate_clicked = st.button(
+        "🚀 Phân tích & Sinh Đặc tả Hệ thống",
+        type="primary",
+        use_container_width=True,
+    )
+
+with col_info:
+    if not api_key:
+        st.info("💡 Vui lòng cấu hình `GEMINI_API_KEY` ở thanh bên trái để thực hiện phân tích.")
+
+if generate_clicked:
+    if not api_key:
+        st.error("Lỗi: Bạn cần cung cấp Gemini API Key để thực hiện.")
+    elif not meeting_notes_text.strip():
+        st.error("Lỗi: Vui lòng nhập nội dung ghi chú họp trước khi phân tích.")
+    else:
+        with st.spinner("🤖 AI Principal BA & Enterprise Architect đang phân tích nghiệp vụ, chuẩn hóa 3NF và sinh sơ đồ..."):
+            try:
+                result_doc = generate_srs_from_notes(meeting_notes_text, api_key)
+                st.session_state["srs_result"] = result_doc
+                st.toast("🎉 Đã sinh thành công Đặc tả Hệ thống & Sơ đồ Kiến trúc!", icon="✅")
+            except Exception as e:
+                st.error(f"❌ Quá trình phân tích gặp sự cố: {str(e)}")
+
+# -------------------------------------------------------------
+# HIỂN THỊ KẾT QUẢ TRÊN 4 TABS
+# -------------------------------------------------------------
+doc: SRSDocument = st.session_state.get("srs_result")
+
+if doc:
+    st.markdown("---")
+    st.subheader(f"📑 Dự án: {doc.project_title}")
+
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📋 Tab 1: Đặc tả Yêu cầu (SRS & User Stories)",
+        "🔄 Tab 2: Sơ đồ Tuần tự (UML Sequence Diagram)",
+        "🗄️ Tab 3: Thiết kế CSDL (ERD 3NF & SQL DDL)",
+        "📥 Tab 4: Xuất Tài liệu (Export Markdown)",
+    ])
+
+    # ---------------- TAB 1: SRS & USER STORIES ----------------
+    with tab1:
+        st.markdown("#### 🎯 Mục tiêu Kinh doanh (Business Objective)")
+        st.info(doc.business_objective)
+
+        st.markdown("#### 👥 Danh sách Tác nhân Hệ thống (Actors)")
+        actors_cols = st.columns(len(doc.actors) if doc.actors else 1)
+        for idx, actor in enumerate(doc.actors):
+            with actors_cols[idx % len(actors_cols)]:
+                st.success(f"👤 **{actor}**")
+
+        st.markdown("#### 📝 Danh mục Yêu cầu Chức năng (Functional Requirements)")
+        for fr in doc.functional_requirements:
+            priority_color = {
+                "High": "red",
+                "Must Have": "red",
+                "Medium": "orange",
+                "Should Have": "orange",
+                "Low": "green",
+                "Could Have": "green",
+            }.get(fr.priority, "blue")
+
+            with st.container(border=True):
+                col_fr_title, col_fr_prio = st.columns([4, 1])
+                with col_fr_title:
+                    st.markdown(f"##### **[{fr.req_id}]** {fr.title}")
+                with col_fr_prio:
+                    st.markdown(f":{priority_color}[**{fr.priority}**]")
+
+                st.markdown(f"**User Story:** *{fr.user_story}*")
+
+                with st.expander(f"🔍 Xem {len(fr.acceptance_criteria)} Tiêu chí Chấp nhận (Acceptance Criteria - Gherkin BDD)"):
+                    for ac_idx, ac in enumerate(fr.acceptance_criteria, start=1):
+                        st.markdown(f"**Kịch bản {ac_idx}:**")
+                        st.markdown(f"- 🟡 **Given:** {ac.given}")
+                        st.markdown(f"- 🔵 **When:** {ac.when}")
+                        st.markdown(f"- 🟢 **Then:** {ac.then}")
+                        if ac_idx < len(fr.acceptance_criteria):
+                            st.divider()
+
+        st.markdown("#### 🛡️ Yêu cầu Phi Chức năng (Non-Functional Requirements)")
+        nfr_data = [
+            {
+                "Phân loại": nfr.category,
+                "Mô tả yêu cầu (IEEE 29148)": nfr.description,
+                "Chỉ số nghiệm thu (Metric / SLA)": nfr.metric,
+            }
+            for nfr in doc.non_functional_requirements
+        ]
+        st.table(nfr_data)
+
+    # ---------------- TAB 2: UML SEQUENCE DIAGRAM ----------------
+    with tab2:
+        st.markdown("#### 🔄 Sơ đồ Tuần tự Nghiệp vụ Trọng tâm (UML Sequence Diagram)")
+        st.caption("Minh họa luồng tương tác giữa các tác nhân và thành phần hệ thống theo thời gian.")
+
+        render_mermaid(doc.sequence_diagram_mermaid, height=560)
+
+        with st.expander("📄 Xem mã nguồn Mermaid Sequence Diagram"):
+            st.code(doc.sequence_diagram_mermaid, language="mermaid")
+
+    # ---------------- TAB 3: ERD 3NF & SQL DDL ----------------
+    with tab3:
+        col_erd, col_sql = st.columns([1, 1], gap="medium")
+
+        with col_erd:
+            st.markdown("#### 🗄️ Sơ đồ Thực thể Quan hệ Chuẩn 3NF")
+            st.caption("Triệt tiêu phụ thuộc từng phần (2NF) và phụ thuộc bắc cầu (3NF).")
+            render_mermaid(doc.er_diagram_mermaid, height=560)
+
+            with st.expander("📄 Xem mã nguồn Mermaid ERD"):
+                st.code(doc.er_diagram_mermaid, language="mermaid")
+
+        with col_sql:
+            st.markdown("#### 💾 Kịch bản Khởi tạo CSDL (SQL DDL)")
+            
+            # Kiểm định cú pháp SQL DDL bằng sqlglot
+            is_sql_valid, sql_validation_msg = validate_sql_ddl(doc.sql_ddl_script)
+            if is_sql_valid:
+                st.success(f"✅ {sql_validation_msg} (Kiểm định bởi `sqlglot AST Parser`)")
+            else:
+                st.warning(f"⚠️ Cảnh báo kiểm định SQL: {sql_validation_msg}")
+
+            st.code(doc.sql_ddl_script, language="sql")
+
+    # ---------------- TAB 4: EXPORT MARKDOWN ----------------
+    with tab4:
+        st.markdown("#### 📥 Xuất Tài liệu Đặc tả Hệ thống (SRS Export)")
+        st.caption("Tải về toàn bộ hồ sơ dự án dưới định dạng Markdown để lưu trữ hoặc nhập vào Notion / Jira / Confluence.")
+
+        md_content = export_srs_markdown(doc)
+
+        slug_title = re.sub(r"[^a-zA-Z0-9_\-]+", "_", doc.project_title.lower()).strip("_")
+        download_filename = f"SRS_{slug_title}.md"
+
+        st.download_button(
+            label="📥 Tải xuống Toàn bộ Tài liệu SRS (.md)",
+            data=md_content.encode("utf-8"),
+            file_name=download_filename,
+            mime="text/markdown",
+            type="primary",
+        )
+
+        with st.expander("👁️ Xem trước nội dung tài liệu Markdown", expanded=True):
+            st.text_area("Markdown Preview", value=md_content, height=400)
