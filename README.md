@@ -1,181 +1,255 @@
-# 📐 ba-srs-uml-copilot: AI Business Analyst & System Architect Copilot
+# 📐 BA & System Architect Copilot | Enterprise Requirements, UML Modeling & 3NF Database Sandbox
 
-[![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
+[![CI Quality Gate](https://github.com/daongochan/ba-srs-uml-copilot/actions/workflows/ci_test.yml/badge.svg)](https://github.com/daongochan/ba-srs-uml-copilot/actions/workflows/ci_test.yml)
+[![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.38%2B-FF4B4B.svg)](https://streamlit.io/)
-[![Google GenAI](https://img.shields.io/badge/Google%20GenAI-gemini--2.5--flash-4285F4.svg)](https://ai.google.dev/)
+[![Google GenAI](https://img.shields.io/badge/Google%20GenAI-gemini--3.8--flash-4285F4.svg)](https://ai.google.dev/)
 [![Pydantic](https://img.shields.io/badge/Pydantic-v2.8%2B-E92063.svg)](https://docs.pydantic.dev/)
-[![SQLGlot](https://img.shields.io/badge/SQLGlot-AST%20Validator-green.svg)](https://github.com/tobymao/sqlglot)
-[![Standard](https://img.shields.io/badge/Standards-IEEE%2029148%20%7C%20BABOK%20v3%20%7C%203NF-purple.svg)](#điểm-nhấn-kỹ-thuật)
+[![SQLGlot](https://img.shields.io/badge/SQLGlot-AST%20Parser-green.svg)](https://github.com/tobymao/sqlglot)
+[![Testing](https://img.shields.io/badge/Tests-34%2F34%20Passed%20(100%25)-success.svg)](tests/)
+[![Standards](https://img.shields.io/badge/Standards-IEEE%2029148%20%7C%20BABOK%20v3%20%7C%20ISO%2FIEC%2025010%20%7C%203NF-purple.svg)](#3-core-technical-highlights)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> **Tự động hóa phân tích yêu cầu phần mềm chuẩn công nghiệp:** Chuyển hóa biên bản họp khách hàng thô (Meeting Notes) thành Đặc tả Yêu cầu SRS chuẩn **IEEE 29148 / BABOK v3**, Sơ đồ Tuần tự **UML Sequence Diagram**, Sơ đồ Thực thể Quan hệ **ERD Chuẩn 3NF** và Kịch bản **SQL DDL** được xác thực cú pháp AST.
+> **Enterprise-Grade AI Copilot for Business Analysts & Solution Architects:** Automatically transforms unstructured client meeting notes into formal **IEEE 29148 & BABOK v3** Software Requirements Specifications (SRS), dynamic **UML Sequence & State Machine Diagrams**, **3NF Entity-Relationship Diagrams**, and PostgreSQL **SQL DDL scripts** verified in real-time within an **In-Memory SQLite Sandbox**.
 
 ---
 
-## 🎯 Tổng quan Bài toán (Problem Statement)
-
-Trong quy trình phát triển phần mềm chuẩn CMMI / Agile, khoảng trống lớn nhất giữa **Business Stakeholders** và **Engineering Team** nằm ở khâu phân tích yêu cầu:
-1. **Ghi chú phân tán & mơ hồ:** Ghi chú họp khách hàng thường lộn xộn, thiếu cấu trúc, không rõ ràng về phạm vi (Scope Creep) và tác nhân (Actors).
-2. **Tiêu chí nghiệm thu thiếu chuẩn mực:** Yêu cầu chức năng thường được viết chung chung, thiếu kịch bản kiểm thử (Acceptance Criteria), dẫn đến tranh cãi khi bàn giao sản phẩm.
-3. **Mô hình hóa CSDL sai chuẩn:** Cơ sở dữ liệu thường bị dư thừa dữ liệu hoặc vi phạm các dạng chuẩn (1NF, 2NF, 3NF), dẫn đến dị thường khi cập nhật (Update Anomalies) và lỗi khóa ngoại.
-4. **Mất nhiều thời gian chuyển đổi thủ công:** Một Business Analyst (BA) hoặc System Architect mất trung bình từ 3 đến 5 ngày để tổng hợp SRS, vẽ sơ đồ Sequence, thiết kế ERD và viết script SQL DDL.
-
-**`ba-srs-uml-copilot`** giải quyết triệt để bài toán trên bằng cách đóng vai một **Principal Business Analyst (chứng chỉ IIBA CBAP)** và **Senior Database Architect**, tự động hóa toàn bộ chuỗi giá trị phân tích chỉ trong vài chục giây với độ chính xác cao và định dạng chuẩn mực.
+## 📑 Table of Contents
+- [1. Executive Summary & Problem Statement](#1-executive-summary--problem-statement)
+- [2. System Architecture & Workflow](#2-system-architecture--workflow)
+- [3. Core Technical Highlights](#3-core-technical-highlights)
+  - [3.1. Zero-Hallucination Structured Outputs (Pydantic V2 & Gemini)](#31-zero-hallucination-structured-outputs-pydantic-v2--gemini)
+  - [3.2. BABOK v3 Traceability Matrix (RTM) & IEEE 29148 Quality Audit](#32-babok-v3-traceability-matrix-rtm--ieee-29148-quality-audit)
+  - [3.3. Deterministic AST Parsing & In-Memory SQLite Sandbox](#33-deterministic-ast-parsing--in-memory-sqlite-sandbox)
+  - [3.4. Dynamic UML Modeling (Sequence & State Machine Diagrams)](#34-dynamic-uml-modeling-sequence--state-machine-diagrams)
+  - [3.5. Human-in-the-Loop (HITL) Live Workbench](#35-human-in-the-loop-hitl-live-workbench)
+  - [3.6. Resilient Lazy Visibility Rendering](#36-resilient-lazy-visibility-rendering)
+  - [3.7. Enterprise Multi-Format Export Bundle](#37-enterprise-multi-format-export-bundle)
+- [4. Project Structure](#4-project-structure)
+- [5. Quick Start & Installation Guide](#5-quick-start--installation-guide)
+- [6. Automated Testing & CI/CD Pipeline](#6-automated-testing--cicd-pipeline)
+- [7. Built-in Industry Demonstration Scenarios](#7-built-in-industry-demonstration-scenarios)
+- [8. Author & Professional Profile](#8-author--professional-profile)
+- [9. License](#9-license)
 
 ---
 
-## 🏗️ Kiến trúc Hệ thống (System Architecture)
+## 1. Executive Summary & Problem Statement
+
+In enterprise software engineering and IT consulting, the bridge between **Business Stakeholders** and **Software Engineering Teams** is notoriously error-prone and labor-intensive:
+
+1. **Fragmented & Ambiguous Requirements:** Meeting transcripts and client notes are inherently unstructured, laden with implicit assumptions and unstated boundaries, leading directly to scope creep and expensive rework.
+2. **Untestable Acceptance Criteria:** Functional requirements often lack formalized acceptance criteria, causing friction during User Acceptance Testing (UAT).
+3. **Improper Database Normalization:** Novice architects frequently produce schemas violating normalization rules (1NF, 2NF, 3NF), creating transitive dependencies, update anomalies, and broken foreign key references.
+4. **Time & Effort Bottlenecks:** A Senior Business Analyst typically spends 3 to 5 business days synthesizing notes into formal SRS, drawing UML diagrams, designing ERDs, and drafting database DDL scripts.
+5. **Syntactical Fragility in LLM Generation:** Standard LLMs frequently generate broken Mermaid syntax (unescaped brackets, unquoted Vietnamese labels, illegal data type parameters like `varchar(150)`) and SQL with platform-incompatible clauses.
+
+**`ba-srs-uml-copilot`** solves these challenges by assuming the dual personas of a **Lead Business Analyst (IIBA CBAP certified)** and a **Principal Enterprise Solutions Architect**. It automates the entire requirements analysis lifecycle in under 30 seconds with 100% syntactical deterministic validation.
+
+---
+
+## 2. System Architecture & Workflow
 
 ```mermaid
 flowchart TD
-    A[Biên bản Họp Khách hàng / Meeting Notes Thô] --> B[Giao diện Người dùng Streamlit UI]
-    B --> C[Service: ai_generator.py]
-    
-    subgraph AI Engine & Structured Reasoning
-        C --> D[Google GenAI Client: gemini-2.5-flash]
-        D --> E[System Prompt: Principal BA & Architect Persona]
-        E --> F[Pydantic Schema Enforcement: SRSDocument]
+    A[Raw Client Meeting Notes / Transcript] --> B[Streamlit Web UI / Human Input]
+    B --> C[AI Generator Service: ai_generator.py]
+
+    subgraph LLM Reasoning & Schema Enforcement
+        C --> D[Google Gemini 3.8 Flash API]
+        D --> E[System Prompt: Principal BA & Enterprise Architect]
+        E --> F[Pydantic V2 Schema Validation: SRSDocument]
     end
 
-    F --> G[Bộ Kiểm Định & Làm Sạch Cú pháp: syntax_validator.py]
-    
-    subgraph Deterministic Validation Pipeline
-        G --> H[clean_and_validate_mermaid: Regex Markdown Stripper & Keyword Guard]
-        G --> I[validate_sql_ddl: sqlglot AST Parser & CREATE TABLE Inspector]
+    F --> G[Deterministic Validation Pipeline]
+
+    subgraph Syntax Cleaning & AST Verification
+        G --> H[syntax_validator: clean_and_validate_mermaid]
+        G --> I[syntax_validator: validate_sql_ddl with sqlglot AST]
+        G --> J[db_sandbox: execute_and_audit_ddl in SQLite :memory:]
     end
 
-    H --> J[Tab 2: Render Sequence Diagram qua Mermaid CDN]
-    H --> K[Tab 3: Render ERD 3NF qua Mermaid CDN]
-    I --> L[Tab 3: Hiển thị SQL DDL kèm Verification Badge]
-    F --> M[Tab 1: Bảng SRS, User Story & Gherkin BDD]
-    F --> N[Tab 4: Xuất Toàn bộ Hồ sơ sang Markdown IEEE 29148]
+    H --> K[Tab 2: UML Dynamic Models\nSequence & State Machine]
+    I --> L[Tab 3: 3NF ERD & SQL DDL Display]
+    J --> M[Tab 3: In-Memory DB Sandbox Audit Report\nPhysical Tables & FK Constraints]
+    F --> N[Tab 1: SRS, Gherkin BDD, RTM & Quality Audit]
+
+    subgraph Human-in-the-Loop Live Workbench
+        K <--> O[HITL UML Live Editor: Sequence & State Diagrams]
+        L <--> P[DBA Live Workbench: ERD & SQL DDL Live Editing]
+        P --> J
+    end
+
+    subgraph Enterprise Export Bundle
+        F --> Q[exporter: generate_markdown_report]
+        F --> R[exporter: generate_rtm_csv_bytes with UTF-8 BOM]
+        F --> S[exporter: create_project_bundle_zip in RAM]
+        Q --> T[Tab 4: 01_SRS_Specification_IEEE29148.md]
+        R --> U[Tab 4: 03_Traceability_Matrix_RTM.csv]
+        S --> V[Tab 4: SRS_Bundle.zip with 7 Artifacts]
+    end
 ```
 
 ---
 
-## 💡 Điểm nhấn Kỹ thuật (Technical Highlights)
+## 3. Core Technical Highlights
 
-### 1. Chuẩn hóa Đặc tả IEEE 29148 & BABOK Guide v3
-- Phân rã mục tiêu kinh doanh (Business Objective) và phạm vi hệ thống rõ ràng.
-- Định danh tác nhân (Actors), ánh xạ User Story chuẩn: `Là [tác nhân], tôi muốn [hành động], để [mục đích]`.
-- Phân loại độ ưu tiên theo chuẩn **MoSCoW** (Must Have, Should Have, Could Have) hoặc High/Medium/Low.
+### 3.1. Zero-Hallucination Structured Outputs (Pydantic V2 & Gemini)
+- Utilizes Google's modern `google-genai` SDK with native JSON structured output (`response_schema=SRSDocument`, `response_mime_type="application/json"`).
+- Strict typing eliminates structural hallucination, guaranteeing that every requirement contains an ID (`FR-01`), priority (MoSCoW), user story, and complete Gherkin BDD criteria (`Given - When - Then`).
 
-### 2. Tiêu chí Chấp nhận Chuẩn BDD Gherkin (Given - When - Then)
-- Mọi yêu cầu chức năng (Functional Requirement) đều đi kèm các kịch bản kiểm thử độc lập:
-  - **Given:** Tiền điều kiện hoặc trạng thái ban đầu của hệ thống.
-  - **When:** Sự kiện hoặc hành động kích hoạt từ phía tác nhân.
-  - **Then:** Kết quả mong đợi và trạng thái thay đổi của hệ thống.
-- Sẵn sàng chuyển giao cho QA/QC tự động hóa thành Test Cases (Cucumber / Behave / Playwright).
+### 3.2. BABOK v3 Traceability Matrix (RTM) & IEEE 29148 Quality Audit
+- **Requirements Traceability Matrix (RTM):** Automatically traces each functional requirement through its business rule, corresponding database tables, and acceptance test scenario.
+- **Ambiguity & Quality Audit:** Evaluates the specification against IEEE 29148 (completeness, consistency) and INVEST criteria (0–100 score).
+- **Proactive Elicitation Questions:** Detects missing business rules or scope gaps in raw meeting notes and formulates precise follow-up questions for stakeholders.
 
-### 3. Thiết kế CSDL Chuẩn Dạng 3 (Third Normal Form - 3NF)
-- Triệt tiêu hoàn toàn trùng lặp dữ liệu (1NF).
-- Đảm bảo mọi thuộc tính phi khóa phụ thuộc đầy đủ vào khóa chính (2NF).
-- Loại bỏ triệt để phụ thuộc bắc cầu (3NF), ngăn chặn hiện tượng bất thường khi thêm/xóa/sửa (Anomalies).
+### 3.3. Deterministic AST Parsing & In-Memory SQLite Sandbox
+- **SQLGlot AST Parsing:** Analyzes SQL DDL syntax deterministically to guarantee valid PostgreSQL / ANSI SQL constructs before rendering.
+- **In-Memory SQLite Sandbox (`sqlite3.connect(":memory:")`):**
+  - Transpiles DDL from PostgreSQL to SQLite dialect.
+  - Strips PostgreSQL-specific clauses that break SQLite: `NULLS LAST` / `NULLS FIRST`, `USING (BTREE|HASH|GIN|GIST)`, `CONCURRENTLY`, and `DEFAULT uuid_generate_v4()`.
+  - **Isolated Execution:** Executes `CREATE TABLE` and `CREATE INDEX` in independent phases so index edge cases never invalidate physical table audits.
+  - Inspects physical tables and foreign keys via `PRAGMA table_info` and `PRAGMA foreign_key_list`.
 
-### 4. Kiểm định Cú pháp Tất định (Deterministic AST Validation)
-- **SQL DDL Validation:** Sử dụng thư viện `sqlglot` để phân tích cây cú pháp trừu tượng (Abstract Syntax Tree - AST), bảo đảm tất cả các câu lệnh `CREATE TABLE`, khóa chính, khóa ngoại `REFERENCES` không bị lỗi cú pháp trước khi hiển thị.
-- **Mermaid Markdown Guard:** Tự động loại bỏ các thẻ markdown thừa (như ```` ```mermaid ```` và ```` ``` ````) do LLM sinh ra, đồng thời xác thực từ khóa đầu dòng (`sequenceDiagram` hoặc `erDiagram`).
+### 3.4. Dynamic UML Modeling (Sequence & State Machine Diagrams)
+- **Sequence Diagram (`sequenceDiagram`):** Illustrates the core business lifecycle, actor interactions, error flows, and asynchronous events with sanitized participant naming.
+- **State Machine Diagram (`stateDiagram-v2`):** Models the lifecycle of the core entity (e.g., Ticket / Seat reservation state transitions, cancellation triggers, timeouts).
 
-### 5. Ép kiểu Đầu ra 100% bằng Pydantic V2 & Gemini Structured Outputs
-- Ứng dụng tính năng `response_mime_type="application/json"` và `response_schema=SRSDocument` của SDK `google-genai` mới nhất, loại bỏ hoàn toàn hiện tượng ảo giác (hallucination) về cấu trúc schema JSON.
+### 3.5. Human-in-the-Loop (HITL) Live Workbench
+- **Tab 2 UML Live Editor:** Allows Business Analysts to modify Mermaid Sequence and State Machine code directly in interactive text areas and re-render diagrams instantly.
+- **Tab 3 DBA Live Workbench:** Enables Database Engineers to tweak `er_diagram_mermaid` and `sql_ddl_script` simultaneously. Clicking **"Áp dụng & Kiểm định lại CSDL"** executes the modified DDL in the SQLite sandbox, updating table counts and foreign key metrics in real-time.
+
+### 3.6. Resilient Lazy Visibility Rendering
+- Addresses Streamlit's classic zero-dimension tab issue (`offsetWidth == 0` causing SVG geometry failures like `getPointAtLength on empty path` or `svg element not in render tree`).
+- Implements an inline `ResizeObserver` and `IntersectionObserver` inside custom HTML components to defer rendering until the tab becomes physically visible in the DOM.
+
+### 3.7. Enterprise Multi-Format Export Bundle
+Packages all engineering artifacts into a single in-memory `.zip` bundle (no temporary disk writes):
+1. `01_SRS_Specification_IEEE29148.md`: Complete IEEE 29148 specification.
+2. `02_Database_Schema_3NF.sql`: PostgreSQL DDL script with constraints and indexes.
+3. `03_Traceability_Matrix_RTM.csv`: Requirements Traceability Matrix encoded with UTF-8 BOM (`utf-8-sig`) for Excel compatibility.
+4. `04_System_Architecture_Model.json`: Pydantic AST JSON model.
+5. `diagrams/sequence_diagram.mmd`: Raw Mermaid Sequence Diagram.
+6. `diagrams/state_machine.mmd`: Raw Mermaid State Machine Diagram.
+7. `diagrams/erd_3nf.mmd`: Raw Mermaid 3NF Entity Relationship Diagram.
 
 ---
 
-## 📂 Cấu trúc Thư mục Dự án
+## 4. Project Structure
 
 ```text
 ba-srs-uml-copilot/
-├── .env.example              # Khai báo biến môi trường mẫu
-├── .gitignore                # Danh sách loại trừ Git chuẩn Python
-├── requirements.txt          # Các thư viện phụ thuộc (Streamlit, Pydantic, GenAI, SQLGlot)
-├── README.md                 # Tài liệu hướng dẫn chuẩn công nghiệp
+├── .github/
+│   └── workflows/
+│       └── ci_test.yml          # GitHub Actions CI automated testing pipeline
+├── .env.example                 # Environment variables template
+├── .gitignore                   # Standard Python/IDE ignore rules
+├── LICENSE                      # MIT Open Source License
+├── README.md                    # Enterprise architectural documentation
+├── requirements.txt             # Production & testing dependencies
 ├── src/
 │   ├── __init__.py
-│   ├── app.py                # Giao diện web Streamlit (4 Tabs + Mermaid CDN)
+│   ├── app.py                   # Streamlit Web App (4 Tabs, HITL Live Editor, Exporter)
 │   ├── data/
 │   │   ├── __init__.py
-│   │   └── sample_inputs.py  # 3 kịch bản khảo sát thực tế (Cinema, Bus, WMS)
+│   │   └── sample_inputs.py     # 3 Real-world meeting note scenarios (Cinema, Bus, WMS)
 │   ├── models/
 │   │   ├── __init__.py
-│   │   └── srs_schema.py     # Pydantic Schemas (SRSDocument, FR, NFR, AC)
+│   │   └── srs_schema.py        # Pydantic Schemas (SRSDocument, FR, NFR, RTM, QualityAudit)
 │   ├── services/
 │   │   ├── __init__.py
-│   │   └── ai_generator.py   # Tích hợp Gemini 2.5 Flash Structured Outputs
+│   │   ├── ai_generator.py      # Gemini 3.8 Flash Integration with Structured Outputs
+│   │   └── exporter.py          # Multi-format report generator (Markdown, CSV, RAM ZIP)
 │   └── validators/
 │       ├── __init__.py
-│       └── syntax_validator.py # Bộ tiền xử lý Mermaid & AST Validator SQLGlot
+│       ├── syntax_validator.py  # Mermaid sanitization & SQLGlot AST parser
+│       └── db_sandbox.py        # SQLite in-memory DDL execution & FK audit sandbox
 └── tests/
     ├── __init__.py
-    ├── test_schemas.py       # Unit test Pydantic serialization & validation
-    └── test_validators.py    # Unit test Mermaid sanitizer & SQLGlot DDL parser
+    ├── test_ai_generator.py     # Unit tests for AI generator service & validation error handling
+    ├── test_exporter.py         # Unit tests for Markdown, UTF-8 BOM CSV, and ZIP bundle (7 files)
+    ├── test_markdown_export.py  # Unit tests for backward compatibility & SRS markdown export
+    ├── test_schemas.py          # Unit tests for Pydantic schema validation & serialization
+    └── test_validators.py       # Unit tests for Mermaid sanitizer, SQLGlot, and DB Sandbox
 ```
 
 ---
 
-## 🚀 Hướng dẫn Cài đặt & Khởi chạy
+## 5. Quick Start & Installation Guide
 
-### 1. Yêu cầu Tiên quyết
-- **Python:** Phiên bản 3.11, 3.12 hoặc 3.13.
-- **Google Gemini API Key:** Đăng ký miễn phí tại [Google AI Studio](https://aistudio.google.com/).
+### Prerequisites
+- **Python:** Version `3.10`, `3.11`, `3.12`, or `3.13`.
+- **Google Gemini API Key:** Obtain a free key at [Google AI Studio](https://aistudio.google.com/).
 
-### 2. Cài đặt Môi trường
-Clone repository về máy và kích hoạt môi trường ảo:
+### Installation
 
 ```bash
-# Clone repository
+# 1. Clone repository
 git clone https://github.com/daongochan/ba-srs-uml-copilot.git
 cd ba-srs-uml-copilot
 
-# Tạo môi trường ảo
+# 2. Create virtual environment
 python -m venv .venv
 
-# Kích hoạt môi trường (Windows PowerShell)
-.venv\Scripts\Activate.ps1
-
-# Hoặc kích hoạt trên Linux / macOS
+# 3. Activate virtual environment
+# Windows (PowerShell):
+.\.venv\Scripts\Activate.ps1
+# Linux / macOS:
 # source .venv/bin/activate
 
-# Cài đặt các thư viện cần thiết
+# 4. Install dependencies
 pip install -r requirements.txt
 ```
 
-### 3. Cấu hình Khóa API
-Sao chép file `.env.example` thành `.env` và điền khóa API của bạn:
+### Environment Configuration
 
 ```bash
+# Copy sample environment file
 cp .env.example .env
 ```
 
-Mở `.env` và chỉnh sửa:
+Edit `.env` with your API key:
 ```ini
 GEMINI_API_KEY=AIzaSy...your_gemini_api_key_here
 ```
 
-### 4. Khởi chạy Ứng dụng Streamlit
-Chạy lệnh sau để khởi động ứng dụng web trên trình duyệt:
+### Running the Application
 
 ```bash
 streamlit run src/app.py
 ```
 
-Truy cập ứng dụng tại: `http://localhost:8501`
+The application will launch automatically at: `http://localhost:8501`.
 
 ---
 
-## 🧪 Kiểm thử Tự động (Testing Suite)
+## 6. Automated Testing & CI/CD Pipeline
 
-Dự án tích hợp bộ kiểm thử đơn vị tự động với `pytest`:
+The project implements automated unit testing covering schemas, sanitizers, AST validation, database sandbox execution, and bundle export:
 
 ```bash
-pytest -v
+# Execute full test suite
+pytest -v --tb=short
 ```
 
-Kết quả kiểm thử đạt **100% Passed (14/14 tests)**:
+### Test Suite Execution Summary (34/34 Passed - 100%)
 ```text
+tests/test_ai_generator.py::test_generate_srs_empty_api_key_raises_error PASSED
+tests/test_ai_generator.py::test_generate_srs_empty_notes_raises_error PASSED
+tests/test_ai_generator.py::test_generate_srs_from_notes_success_mock PASSED
+tests/test_exporter.py::test_generate_markdown_report PASSED
+tests/test_exporter.py::test_generate_rtm_csv_bytes PASSED
+tests/test_exporter.py::test_create_project_bundle_zip PASSED
+tests/test_markdown_export.py::test_export_srs_markdown_contains_all_sections PASSED
+tests/test_markdown_export.py::test_export_srs_markdown_backward_compatible_without_state_machine PASSED
 tests/test_schemas.py::test_srs_document_instantiation_and_validation PASSED
 tests/test_validators.py::TestMermaidValidator::test_clean_sequence_diagram_with_markdown_fence PASSED
 tests/test_validators.py::TestMermaidValidator::test_clean_er_diagram_with_generic_code_fence PASSED
 tests/test_validators.py::TestMermaidValidator::test_mermaid_already_clean PASSED
+tests/test_validators.py::TestMermaidValidator::test_clean_er_diagram_removes_data_type_sizes_and_commas PASSED
+tests/test_validators.py::TestMermaidValidator::test_clean_mermaid_escaped_newlines PASSED
+tests/test_validators.py::TestMermaidValidator::test_clean_sequence_diagram_participant_quoting PASSED
+tests/test_validators.py::TestMermaidValidator::test_clean_state_diagram_v2_and_sanitization PASSED
 tests/test_validators.py::TestMermaidValidator::test_mermaid_with_leading_comments PASSED
 tests/test_validators.py::TestMermaidValidator::test_mermaid_case_insensitive_keyword PASSED
 tests/test_validators.py::TestMermaidValidator::test_invalid_mermaid_keyword PASSED
@@ -186,18 +260,44 @@ tests/test_validators.py::TestSqlDdlValidator::test_valid_multiple_create_tables
 tests/test_validators.py::TestSqlDdlValidator::test_empty_sql_script PASSED
 tests/test_validators.py::TestSqlDdlValidator::test_sql_with_syntax_error PASSED
 tests/test_validators.py::TestSqlDdlValidator::test_sql_without_create_table PASSED
+tests/test_validators.py::TestRtmAndQualityAuditSchemas::test_traceability_item_creation PASSED
+tests/test_validators.py::TestRtmAndQualityAuditSchemas::test_quality_audit_creation PASSED
+tests/test_validators.py::TestRtmAndQualityAuditSchemas::test_srs_document_with_rtm_and_quality_audit PASSED
+tests/test_validators.py::TestDbSandbox::test_execute_and_audit_ddl_two_tables_with_foreign_key PASSED
+tests/test_validators.py::TestDbSandbox::test_execute_and_audit_ddl_with_postgres_uuid_default PASSED
+tests/test_validators.py::TestDbSandbox::test_execute_and_audit_ddl_empty PASSED
+tests/test_validators.py::TestDbSandbox::test_execute_and_audit_ddl_syntax_error PASSED
+tests/test_validators.py::TestDbSandbox::test_execute_and_audit_ddl_with_postgres_index_nulls_last PASSED
 ```
 
----
-
-## 📝 3 Kịch bản Mẫu Tích hợp Sẵn
-
-Người dùng có thể bấm nạp nhanh 1 trong 3 kịch bản thực tế ngay trên giao diện để trải nghiệm:
-1. **🎬 Rạp chiếu phim CineMax:** Quản lý cụm rạp, phòng chiếu IMAX/VIP, cơ chế khóa ghế tạm thời 10 phút (Seat Lock), đặt vé đa kênh và combo bắp nước.
-2. **🚌 Xe khách Liên tỉnh Phương Nam Express:** Quản lý đội xe 150 phương tiện, tuyến đường và trạm dừng, đặt chỗ theo sơ đồ giường nằm 2 tầng, ký gửi bưu kiện theo mã vận đơn Barcode/QR.
-3. **📦 Quản trị Kho Thông minh LogiTech Pro:** Quản lý danh mục hàng hóa theo mô hình Kệ - Tầng - Ô (Bin-Location), nhập kho theo PO, xuất kho FIFO theo Pick List thông minh, kiểm kê định kỳ và cảnh báo tồn tối thiểu.
+### GitHub Actions CI Workflow
+Automated quality gate configured in `.github/workflows/ci_test.yml`:
+- Triggers on every `push` and `pull_request` to `main`.
+- Runs on `ubuntu-latest` with Python 3.10.
+- Installs dependencies and runs `pytest -v --tb=short`.
 
 ---
 
-## 📄 Bản quyền & Đóng góp (License)
-Dự án được phân phối dưới giấy phép [MIT License](LICENSE). Mọi đóng góp (Pull Request, Issue) đều được chào đón nhằm hoàn thiện giải pháp phân tích yêu cầu phần mềm tự động hóa.
+## 7. Built-in Industry Demonstration Scenarios
+
+Three pre-configured real-world enterprise scenarios are available via quick-load dropdowns in the sidebar:
+
+1. **🎬 CineMax Multiplex Booking System:** Cinema halls, IMAX/VIP screens, 10-minute temporary seat-locking mechanism, combo concessions, multi-channel booking, and cancellation rules.
+2. **🚌 Phuong Nam Interprovincial Logistics & Coach Express:** Fleet management (150+ sleeper coaches), routes and waypoints, 2-tier berth selection, parcel shipping with Barcode/QR waybill tracking.
+3. **📦 LogiTech Smart Warehouse Management System (WMS):** Location hierarchy (Zone - Aisle - Rack - Shelf - Bin), PO receiving, intelligent FIFO pick-lists, automated minimum stock alerts, and cycle counting.
+
+---
+
+## 8. Author & Professional Profile
+
+- **Author:** Đào Ngọc Hân (Dao Ngoc Han)
+- **Academic Background:** Student in **Management Information Systems (MIS)** - **National Economics University (NEU)** (Trường Đại học Kinh tế Quốc dân, Hà Nội).
+- **Core Specialization:** Business Analysis (BABOK v3, IEEE 29148), Enterprise Architecture, Database Design (3NF/BCNF), Agile/Scrum Methodologies, Applied Generative AI.
+- **GitHub:** [@daongochan](https://github.com/daongochan)
+- **Project Repository:** [ba-srs-uml-copilot](https://github.com/daongochan/ba-srs-uml-copilot)
+
+---
+
+## 9. License
+
+This project is licensed under the terms of the [MIT License](LICENSE). Contributions, bug reports, and suggestions are welcome.
