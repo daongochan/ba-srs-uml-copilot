@@ -5,6 +5,11 @@ from src.validators.syntax_validator import (
     clean_and_validate_mermaid,
     validate_sql_ddl,
 )
+from src.models.srs_schema import (
+    TraceabilityItem,
+    QualityAudit,
+    SRSDocument,
+)
 
 
 class TestMermaidValidator:
@@ -198,3 +203,64 @@ CREATE TABLE employees (
         is_valid, message = validate_sql_ddl(query_sql)
         assert is_valid is False
         assert "Không tìm thấy câu lệnh 'CREATE TABLE'" in message
+
+
+class TestRtmAndQualityAuditSchemas:
+    """Test suite for TraceabilityItem and QualityAudit models."""
+
+    def test_traceability_item_creation(self):
+        item = TraceabilityItem(
+            req_id="FR-01",
+            feature_name="Khóa ghế tạm thời",
+            business_rule="Ghế được khóa trong 10 phút, tự giải phóng nếu chưa thanh toán",
+            related_tables=["tickets", "seats", "bookings"],
+            test_scenario_summary="Kiểm thử chọn ghế, đợi 10 phút và xác minh trạng thái ghế tự đổi về trống",
+        )
+        assert item.req_id == "FR-01"
+        assert item.feature_name == "Khóa ghế tạm thời"
+        assert len(item.related_tables) == 3
+        assert "tickets" in item.related_tables
+
+    def test_quality_audit_creation(self):
+        audit = QualityAudit(
+            ieee_compliance_score=95,
+            invest_score=92,
+            third_nf_justification="Bảng tickets tách riêng customer_id để loại bỏ phụ thuộc từng phần 2NF...",
+            clarification_questions=[
+                "Chính sách hoàn tiền khi hủy vé trước giờ chiếu bao lâu?",
+                "Có giới hạn số lượng vé đặt tối đa cho một tài khoản không?",
+            ],
+        )
+        assert audit.ieee_compliance_score == 95
+        assert audit.invest_score == 92
+        assert len(audit.clarification_questions) == 2
+        assert "hoàn tiền" in audit.clarification_questions[0]
+
+    def test_srs_document_with_rtm_and_quality_audit(self):
+        item = TraceabilityItem(
+            req_id="FR-01",
+            feature_name="Đặt vé trực tuyến",
+            business_rule="Phải thanh toán thành công trong 10 phút",
+            related_tables=["bookings", "payments"],
+            test_scenario_summary="Xác nhận tạo đơn đặt vé và chuyển hướng sang cổng thanh toán",
+        )
+        audit = QualityAudit(
+            ieee_compliance_score=98,
+            invest_score=95,
+            third_nf_justification="Đã chuẩn hóa 3NF hoàn chỉnh, triệt tiêu phụ thuộc bắc cầu.",
+            clarification_questions=["Cần xác nhận cổng thanh toán MoMo/VNPAY"],
+        )
+        doc = SRSDocument(
+            project_title="CineMax System",
+            business_objective="Tối ưu đặt vé",
+            sequence_diagram_mermaid="sequenceDiagram\n  User->>Web: Dat ve",
+            er_diagram_mermaid="erDiagram\n  CUSTOMER ||--o{ BOOKING : places",
+            sql_ddl_script="CREATE TABLE bookings (id INT PRIMARY KEY);",
+            traceability_matrix=[item],
+            quality_audit=audit,
+        )
+        assert len(doc.traceability_matrix) == 1
+        assert doc.traceability_matrix[0].req_id == "FR-01"
+        assert doc.quality_audit is not None
+        assert doc.quality_audit.ieee_compliance_score == 98
+        assert "MoMo" in doc.quality_audit.clarification_questions[0]

@@ -44,7 +44,23 @@ CÁC NGUYÊN TẮC BẮT BUỘC:
    - sql_ddl_script: Chứa toàn bộ các câu lệnh `CREATE TABLE` độc lập, đầy đủ kiểu dữ liệu hiện đại, rằng buộc PRIMARY KEY, FOREIGN KEY ... REFERENCES ..., UNIQUE, NOT NULL, INDEX tối ưu hóa truy vấn.
    - Tuân thủ quy ước đặt tên snake_case cho tên bảng và tên cột.
 
-5. Định dạng dữ liệu đầu ra:
+5. Ma trận Truy vết Yêu cầu (Requirements Traceability Matrix - RTM theo BABOK v3):
+   - traceability_matrix: Lập ma trận truy vết toàn diện cho từng yêu cầu chức năng (FR-01, FR-02,...).
+   - Mỗi mục (TraceabilityItem) phải bao gồm:
+     + req_id: Mã định danh yêu cầu tương ứng (FR-01, FR-02,...).
+     + feature_name: Tên tính năng cụ thể.
+     + business_rule: Quy tắc nghiệp vụ chi phối tính năng này.
+     + related_tables: Danh sách các bảng CSDL liên quan trực tiếp, BẮT BUỘC phải ánh xạ chính xác tên bảng thực tế có trong `sql_ddl_script`.
+     + test_scenario_summary: Tóm tắt kịch bản kiểm thử (Test Scenario) trọng tâm dùng để nghiệm thu tính năng.
+
+6. Bộ Kiểm toán Chất lượng Đặc tả & Cảnh báo Điểm Mơ hồ (Quality & Ambiguity Audit):
+   - quality_audit:
+     + ieee_compliance_score: Chấm điểm từ 0-100 đánh giá mức độ hoàn thiện, chặt chẽ của tài liệu theo chuẩn IEEE 29148.
+     + invest_score: Chấm điểm từ 0-100 đánh giá chất lượng User Stories theo bộ tiêu chí INVEST.
+     + third_nf_justification: Giải thích chi tiết, thuyết phục tại sao thiết kế cơ sở dữ liệu đã đạt Chuẩn dạng 3 (3NF), nêu rõ cách triệt tiêu phụ thuộc từng phần (2NF) và phụ thuộc bắc cầu (3NF).
+     + clarification_questions: Phân tích sâu các lỗ hổng, điểm thiếu sót, thông tin mâu thuẫn hoặc mơ hồ trong biên bản họp thô (Meeting Notes), đưa ra tối thiểu 3-5 câu hỏi nghiệp vụ sắc bén (Elicitation Follow-up Questions) để BA phỏng vấn lại khách hàng/Stakeholders nhằm triệt tiêu rủi ro Scope Creep.
+
+7. Định dạng dữ liệu đầu ra:
    - Toàn bộ dữ liệu trả về phải tuân thủ nghiêm ngặt theo schema JSON của SRSDocument.
 """
 

@@ -5,6 +5,8 @@ from src.models.srs_schema import (
     FunctionalRequirement,
     NonFunctionalRequirement,
     SRSDocument,
+    TraceabilityItem,
+    QualityAudit,
 )
 
 __all__ = [
@@ -12,4 +14,6 @@ __all__ = [
     "FunctionalRequirement",
     "NonFunctionalRequirement",
     "SRSDocument",
+    "TraceabilityItem",
+    "QualityAudit",
 ]

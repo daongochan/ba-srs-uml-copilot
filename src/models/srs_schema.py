@@ -63,6 +63,56 @@ class NonFunctionalRequirement(BaseModel):
     )
 
 
+class TraceabilityItem(BaseModel):
+    """Requirements Traceability Matrix (RTM) Item mapping requirements to database and tests."""
+
+    req_id: str = Field(
+        ...,
+        description="Mã định danh yêu cầu tương ứng (ví dụ: FR-01, FR-02)",
+    )
+    feature_name: str = Field(
+        ...,
+        description="Tên tính năng hoặc phân hệ nghiệp vụ tương ứng",
+    )
+    business_rule: str = Field(
+        ...,
+        description="Quy tắc nghiệp vụ cốt lõi chi phối tính năng",
+    )
+    related_tables: List[str] = Field(
+        default_factory=list,
+        description="Danh sách các bảng CSDL liên quan trực tiếp trong mã SQL DDL",
+    )
+    test_scenario_summary: str = Field(
+        ...,
+        description="Tóm tắt kịch bản kiểm thử (Test Scenario) để nghiệm thu tính năng",
+    )
+
+
+class QualityAudit(BaseModel):
+    """Quality and Ambiguity Audit based on IEEE 29148, INVEST and 3NF database standards."""
+
+    ieee_compliance_score: int = Field(
+        default=90,
+        ge=0,
+        le=100,
+        description="Điểm đánh giá mức độ tuân thủ chuẩn IEEE 29148 (thang điểm 0-100)",
+    )
+    invest_score: int = Field(
+        default=90,
+        ge=0,
+        le=100,
+        description="Điểm đánh giá chất lượng User Story theo chuẩn INVEST (thang điểm 0-100)",
+    )
+    third_nf_justification: str = Field(
+        default="",
+        description="Giải thích rõ cách thiết kế bảng CSDL đã loại bỏ phụ thuộc từng phần (2NF) và phụ thuộc bắc cầu (3NF)",
+    )
+    clarification_questions: List[str] = Field(
+        default_factory=list,
+        description="Danh sách các câu hỏi BA cần hỏi lại Stakeholder do thông tin trong biên bản họp còn thiếu hoặc mơ hồ",
+    )
+
+
 class SRSDocument(BaseModel):
     """Software Requirements Specification (SRS) Document combining BABOK & IEEE 29148."""
 
@@ -108,4 +158,12 @@ class SRSDocument(BaseModel):
     sql_ddl_script: str = Field(
         ...,
         description="Mã SQL DDL (Data Definition Language) khởi tạo bảng và khóa ngoại chuẩn 3NF",
+    )
+    traceability_matrix: List[TraceabilityItem] = Field(
+        default_factory=list,
+        description="Ma trận truy vết yêu cầu (Requirements Traceability Matrix - RTM) theo chuẩn BABOK v3",
+    )
+    quality_audit: Optional[QualityAudit] = Field(
+        default_factory=QualityAudit,
+        description="Bộ kiểm toán chất lượng đặc tả IEEE 29148, tiêu chuẩn INVEST và cảnh báo điểm mơ hồ",
     )

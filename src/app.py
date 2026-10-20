@@ -171,7 +171,7 @@ def render_mermaid(mermaid_code: str, height: int = 550, diagram_type: str = "")
 
 
 def export_srs_markdown(doc: SRSDocument) -> str:
-    """Chuyển đổi đối tượng SRSDocument thành văn bản Markdown chuẩn IEEE 29148."""
+    """Chuyển đổi đối tượng SRSDocument thành văn bản Markdown chuẩn IEEE 29148 & BABOK v3."""
     lines = [
         f"# {doc.project_title}",
         "",
@@ -229,6 +229,33 @@ def export_srs_markdown(doc: SRSDocument) -> str:
         "```",
         "",
     ])
+
+    if doc.traceability_matrix:
+        lines.extend([
+            "## 8. Ma trận Truy vết Yêu cầu (Requirements Traceability Matrix - RTM)",
+            "",
+            "| Mã YC | Tên Tính năng | Quy tắc Nghiệp vụ (Business Rule) | Bảng CSDL Liên quan | Kịch bản Kiểm thử Nghiệm thu |",
+            "| :--- | :--- | :--- | :--- | :--- |",
+        ])
+        for item in doc.traceability_matrix:
+            related = ", ".join(item.related_tables) if isinstance(item.related_tables, list) else str(item.related_tables)
+            lines.append(f"| **{item.req_id}** | {item.feature_name} | {item.business_rule} | `{related}` | {item.test_scenario_summary} |")
+        lines.append("")
+
+    if doc.quality_audit and doc.quality_audit.clarification_questions:
+        lines.extend([
+            "## 9. Đánh giá Chất lượng Đặc tả & Điểm Cần Phỏng vấn Lại (Quality & Ambiguity Audit)",
+            "",
+            f"- **Điểm Tuân thủ IEEE 29148:** `{doc.quality_audit.ieee_compliance_score}/100`",
+            f"- **Điểm Chuẩn User Story INVEST:** `{doc.quality_audit.invest_score}/100`",
+            "",
+            "### Câu hỏi Đào sâu Nghiệp vụ Cần Xác nhận lại với Stakeholders (Follow-up Questions):",
+            "",
+        ])
+        for q_idx, q in enumerate(doc.quality_audit.clarification_questions, start=1):
+            lines.append(f"{q_idx}. {q}")
+        lines.append("")
+
     return "\n".join(lines)
 
 
@@ -355,6 +382,39 @@ if doc:
 
     # ---------------- TAB 1: SRS & USER STORIES ----------------
     with tab1:
+        # Thẻ chỉ số chất lượng & kiểm toán (Quality Audit Metrics)
+        ieee_score = doc.quality_audit.ieee_compliance_score if doc.quality_audit else 95
+        invest_score = doc.quality_audit.invest_score if doc.quality_audit else 90
+        fr_count = len(doc.functional_requirements)
+
+        metric_col1, metric_col2, metric_col3 = st.columns(3)
+        with metric_col1:
+            st.metric(
+                label="📋 Điểm Tuân thủ IEEE 29148",
+                value=f"{ieee_score}/100",
+                delta="Chuẩn Đặc tả Quốc tế",
+            )
+        with metric_col2:
+            st.metric(
+                label="🎯 Điểm User Story INVEST",
+                value=f"{invest_score}/100",
+                delta="Chuẩn Agile / Scrum",
+            )
+        with metric_col3:
+            st.metric(
+                label="📌 Số Yêu cầu Chức năng (FR)",
+                value=f"{fr_count} Yêu cầu",
+                delta="Đã cấu trúc hóa",
+            )
+
+        # Cảnh báo Điểm Mơ hồ & Câu hỏi Phỏng vấn lại Khách hàng
+        if doc.quality_audit and doc.quality_audit.clarification_questions:
+            st.markdown("#### ❓ Cảnh báo Điểm Mơ hồ & Câu hỏi Phỏng vấn lại Khách hàng (Elicitation Follow-up Questions)")
+            with st.container(border=True):
+                st.warning("⚠️ **Phân tích Rủi ro & Điểm Mơ hồ Nghiệp vụ:** Dựa trên biên bản họp thô, AI Business Analyst phát hiện các khoảng trống thông tin cần phỏng vấn xác nhận lại với Stakeholders để tránh rủi ro phát sinh phạm vi (Scope Creep):")
+                for q_idx, question in enumerate(doc.quality_audit.clarification_questions, start=1):
+                    st.markdown(f"**{q_idx}.** {question}")
+
         st.markdown("#### 🎯 Mục tiêu Kinh doanh (Business Objective)")
         st.info(doc.business_objective)
 
@@ -404,6 +464,22 @@ if doc:
         ]
         st.table(nfr_data)
 
+        # Ma trận Truy vết Yêu cầu (Requirements Traceability Matrix - RTM)
+        if doc.traceability_matrix:
+            st.markdown("#### 🔗 Ma trận Truy vết Yêu cầu (Requirements Traceability Matrix - RTM)")
+            st.caption("Chuỗi giá trị truy vết theo chuẩn BABOK v3: Mã YC ➔ Tính năng ➔ Quy tắc Nghiệp vụ ➔ Bảng CSDL Liên quan ➔ Kịch bản Kiểm thử Nghiệm thu.")
+            rtm_table = [
+                {
+                    "Mã YC": item.req_id,
+                    "Tên Tính năng": item.feature_name,
+                    "Quy tắc Nghiệp vụ (Business Rule)": item.business_rule,
+                    "Bảng CSDL Liên quan": ", ".join(item.related_tables) if isinstance(item.related_tables, list) else str(item.related_tables),
+                    "Kịch bản Kiểm thử Nghiệm thu": item.test_scenario_summary,
+                }
+                for item in doc.traceability_matrix
+            ]
+            st.dataframe(rtm_table, use_container_width=True, hide_index=True)
+
     # ---------------- TAB 2: UML SEQUENCE DIAGRAM ----------------
     with tab2:
         st.markdown("#### 🔄 Sơ đồ Tuần tự Nghiệp vụ Trọng tâm (UML Sequence Diagram)")
@@ -425,6 +501,10 @@ if doc:
 
             with st.expander("📄 Xem mã nguồn Mermaid ERD"):
                 st.code(doc.er_diagram_mermaid, language="mermaid")
+
+            if doc.quality_audit and doc.quality_audit.third_nf_justification:
+                with st.expander("🏛️ Giải trình Thiết kế CSDL Đạt Chuẩn 3NF (3NF Justification)", expanded=False):
+                    st.info(doc.quality_audit.third_nf_justification)
 
         with col_sql:
             st.markdown("#### 💾 Kịch bản Khởi tạo CSDL (SQL DDL)")
