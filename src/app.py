@@ -26,7 +26,8 @@ st.set_page_config(
 
 def render_mermaid(mermaid_code: str, height: int = 550, diagram_type: str = "") -> None:
     """Nhúng thư viện Mermaid.js từ CDN và render sơ đồ an toàn qua API mermaid.render()
-    kết hợp json.dumps để tránh trình duyệt parse nhầm các ký tự mũi tên HTML.
+    kết hợp json.dumps và cơ chế Lazy Visibility Rendering (ResizeObserver/IntersectionObserver)
+    để tránh lỗi render SVG khi nằm trong Streamlit tab đang ẩn (offsetWidth == 0).
     """
     try:
         clean_code = clean_and_validate_mermaid(mermaid_code, diagram_type=diagram_type)
@@ -84,16 +85,7 @@ def render_mermaid(mermaid_code: str, height: int = 550, diagram_type: str = "")
         <script>
             mermaid.initialize({{
                 startOnLoad: false,
-                theme: 'neutral',
-                themeVariables: {{
-                    fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-                    fontSize: '14px',
-                    primaryColor: '#e0f2fe',
-                    primaryBorderColor: '#0284c7',
-                    lineColor: '#334155',
-                    secondaryColor: '#f8fafc',
-                    tertiaryColor: '#f1f5f9'
-                }},
+                theme: 'default',
                 securityLevel: 'loose'
             }});
 
@@ -111,7 +103,66 @@ def render_mermaid(mermaid_code: str, height: int = 550, diagram_type: str = "")
                 }}
             }}
 
-            renderDiagram();
+            let rendered = false;
+            let resizeObserver = null;
+            let intersectionObserver = null;
+
+            function cleanupObservers() {{
+                if (resizeObserver) {{
+                    resizeObserver.disconnect();
+                    resizeObserver = null;
+                }}
+                if (intersectionObserver) {{
+                    intersectionObserver.disconnect();
+                    intersectionObserver = null;
+                }}
+            }}
+
+            function checkAndRender() {{
+                if (rendered) return;
+                const container = document.getElementById('mermaid-container');
+                if (!container) return;
+
+                // Chỉ render khi tab đã hiển thị thực tế trên cây render (offsetWidth > 0)
+                if (document.body.offsetWidth > 0 && container.offsetWidth > 0) {{
+                    rendered = true;
+                    cleanupObservers();
+                    renderDiagram();
+                }}
+            }}
+
+            const container = document.getElementById('mermaid-container');
+
+            // 1. Nếu đang ở Tab hiển thị sẵn (active tab) -> gọi render ngay
+            if (document.body.offsetWidth > 0 && container && container.offsetWidth > 0) {{
+                rendered = true;
+                renderDiagram();
+            }} else {{
+                // 2. Nếu nằm trong Tab ẩn của Streamlit (offsetWidth == 0) -> theo dõi khi Tab được click mở
+                if (window.ResizeObserver) {{
+                    resizeObserver = new ResizeObserver(() => {{
+                        checkAndRender();
+                    }});
+                    resizeObserver.observe(document.body);
+                    if (container) {{
+                        resizeObserver.observe(container);
+                    }}
+                }}
+
+                if (window.IntersectionObserver && container) {{
+                    intersectionObserver = new IntersectionObserver((entries) => {{
+                        for (const entry of entries) {{
+                            if (entry.isIntersecting || entry.intersectionRatio > 0) {{
+                                checkAndRender();
+                            }}
+                        }}
+                    }});
+                    intersectionObserver.observe(container);
+                }}
+
+                // Dự phòng khi trình duyệt thay đổi kích thước
+                window.addEventListener('resize', checkAndRender);
+            }}
         </script>
     </body>
     </html>
