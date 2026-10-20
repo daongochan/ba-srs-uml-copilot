@@ -1,22 +1,122 @@
 """Syntax validator for Mermaid diagrams and SQL DDL scripts."""
 
 import re
-from typing import Tuple, List
+import unicodedata
+from typing import Tuple, List, Optional
 import sqlglot
 from sqlglot import exp
 from sqlglot.errors import ParseError, SqlglotError
 
 
-def clean_and_validate_mermaid(code: str) -> str:
-    """Loại bỏ các thẻ markdown thừa (như ```mermaid và ```) và kiểm tra
+def _slugify_to_id(text: str) -> str:
+    """Chuyển đổi văn bản tiếng Việt hoặc có khoảng trắng thành ID tiếng Anh hợp lệ."""
+    nfkd = unicodedata.normalize("NFKD", text)
+    ascii_text = "".join(c for c in nfkd if not unicodedata.combining(c))
+    ascii_text = ascii_text.replace("đ", "d").replace("Đ", "D")
+    clean_id = re.sub(r"[^a-zA-Z0-9_]", "_", ascii_text)
+    clean_id = re.sub(r"_+", "_", clean_id).strip("_")
+    if not clean_id or clean_id[0].isdigit():
+        clean_id = f"P_{clean_id}" if clean_id else "Participant"
+    return clean_id
 
-    tính hợp lệ của từ khóa đầu tiên (sequenceDiagram hoặc erDiagram).
+
+def _clean_erd_attribute_line(line: str) -> str:
+    """Xóa kích thước trong ngoặc đơn của kiểu dữ liệu và dấu phẩy thừa ở cuối dòng thuộc tính ERD."""
+    stripped = line.strip()
+    if not stripped or stripped.startswith("%%"):
+        return line
+
+    leading_spaces = len(line) - len(line.lstrip())
+    indent = line[:leading_spaces]
+
+    # Kiểm tra chú thích ở cuối dòng: "comment" hoặc 'comment' (có thể có dấu phẩy sau)
+    comment_match = re.search(r'([\'"])(.*?)\1\s*,?\s*$', stripped)
+    if comment_match:
+        comment_text = comment_match.group(2)
+        before_comment = stripped[:comment_match.start(0)].rstrip()
+        # Xóa kích thước kiểu dữ liệu trong ngoặc: varchar(150) -> varchar, decimal(10, 2) -> decimal
+        before_comment = re.sub(r'([a-zA-Z0-9_]+)\s*\([^)]*\)', r'\1', before_comment)
+        # Xóa dấu phẩy phân tách giữa các trường
+        before_comment = before_comment.replace(',', ' ')
+        tokens = before_comment.split()
+        cleaned_before = " ".join(tokens)
+        return f'{indent}{cleaned_before} "{comment_text}"'
+    else:
+        # Không có chú thích
+        # Xóa dấu phẩy ở cuối dòng
+        cleaned = re.sub(r',\s*$', '', stripped)
+        # Xóa kích thước kiểu dữ liệu trong ngoặc: varchar(150) -> varchar, decimal(10, 2) -> decimal
+        cleaned = re.sub(r'([a-zA-Z0-9_]+)\s*\([^)]*\)', r'\1', cleaned)
+        cleaned = cleaned.replace(',', ' ')
+        tokens = cleaned.split()
+        cleaned_attr = " ".join(tokens)
+        return f'{indent}{cleaned_attr}'
+
+
+def _clean_seq_participant_line(line: str) -> str:
+    """Chuẩn hóa dòng khai báo actor/participant trong Sequence Diagram: ID as "Tên Hiển Thị"."""
+    stripped = line.strip()
+    match = re.match(r"^(actor|participant)\s+(.*)$", stripped, flags=re.IGNORECASE)
+    if not match:
+        return line
+
+    leading_spaces = len(line) - len(line.lstrip())
+    indent = line[:leading_spaces]
+    role = match.group(1)
+    rest = match.group(2).strip()
+
+    # Trường hợp 1: Có từ khóa " as "
+    m_as = re.match(r"^(.*?)\s+as\s+(.*)$", rest, flags=re.IGNORECASE)
+    if m_as:
+        id_part = m_as.group(1).strip()
+        alias_part = m_as.group(2).strip()
+        # Nếu id_part có khoảng trắng hoặc ký tự tiếng Việt/non-ASCII -> slugify thành ID hợp lệ
+        if " " in id_part or any(ord(c) > 127 for c in id_part):
+            id_part = _slugify_to_id(id_part)
+        else:
+            id_part = id_part.strip('\'"')
+
+        # Đảm bảo tên hiển thị được bọc trong dấu ngoặc kép ""
+        if (alias_part.startswith('"') and alias_part.endswith('"')) or (
+            alias_part.startswith("'") and alias_part.endswith("'")
+        ):
+            clean_alias = alias_part[1:-1].strip()
+        else:
+            clean_alias = alias_part.strip()
+        return f'{indent}{role} {id_part} as "{clean_alias}"'
+
+    # Trường hợp 2: Không có " as "
+    # Nếu là một định danh ASCII đơn lẻ không khoảng trắng và không ngoặc kép -> giữ nguyên
+    if " " not in rest and not any(ord(c) > 127 for c in rest) and not rest.startswith(('"', "'")):
+        return line
+
+    # Có khoảng trắng, tiếng Việt hoặc bọc ngoặc kép -> tạo ID và bọc tên hiển thị trong ngoặc kép
+    clean_display = rest.strip('\'"')
+    clean_id = _slugify_to_id(clean_display)
+    return f'{indent}{role} {clean_id} as "{clean_display}"'
+
+
+def _clean_seq_message_line(line: str) -> str:
+    """Loại bỏ dấu chấm phẩy ';' và ngoặc nhọn '{}' trong thông điệp Sequence Diagram."""
+    arrow_pattern = r"(->>|-->>|->|-->|-x|--x|-\)|--\))"
+    if re.search(arrow_pattern, line) and ":" in line:
+        prefix, msg = line.split(":", 1)
+        cleaned_msg = msg.replace(";", "").replace("{", "(").replace("}", ")")
+        return f"{prefix}:{cleaned_msg}"
+    return line
+
+
+def clean_and_validate_mermaid(code: str, diagram_type: str = "") -> str:
+    """Loại bỏ các thẻ markdown thừa (như ```mermaid và ```), unescape ký tự xuống dòng,
+    chuẩn hóa cú pháp Mermaid đặc thù (erDiagram, sequenceDiagram) và kiểm tra tính hợp lệ
+    của từ khóa đầu tiên.
 
     Args:
-        code: Đoạn mã Mermaid (có thể chứa markdown code block)
+        code: Đoạn mã Mermaid (có thể chứa markdown code block, \\n escape)
+        diagram_type: Kiểu sơ đồ ('sequenceDiagram', 'erDiagram', hoặc để trống để tự động nhận diện)
 
     Returns:
-        str: Đoạn mã Mermaid đã được làm sạch và chuẩn hóa.
+        str: Đoạn mã Mermaid đã được làm sạch và chuẩn hóa triệt để.
 
     Raises:
         ValueError: Nếu mã rỗng hoặc từ khóa đầu tiên không phải sequenceDiagram / erDiagram.
@@ -24,15 +124,18 @@ def clean_and_validate_mermaid(code: str) -> str:
     if not code or not code.strip():
         raise ValueError("Mã Mermaid không được để trống.")
 
-    cleaned = code.strip()
+    # 1. Chuyển đổi các chuỗi \\n bị escape thành ký tự xuống dòng \n thực sự
+    cleaned = code.replace("\\r\\n", "\n").replace("\\n", "\n")
 
-    # Loại bỏ code block mở đầu: ```mermaid hoặc ```
-    cleaned = re.sub(r"^```(?:mermaid)?\s*\n?", "", cleaned, flags=re.IGNORECASE).strip()
+    # 2. Loại bỏ hoàn toàn các dòng chứa ```mermaid hoặc ```
+    raw_lines = cleaned.splitlines()
+    lines = [line for line in raw_lines if "```" not in line]
+    cleaned = "\n".join(lines).strip()
 
-    # Loại bỏ code block kết thúc: ```
-    cleaned = re.sub(r"\n?```\s*$", "", cleaned).strip()
+    if not cleaned:
+        raise ValueError("Mã Mermaid không chứa cú pháp hợp lệ.")
 
-    # Tìm dòng lệnh đầu tiên không phải comment (%%) và không rỗng
+    # 3. Tìm dòng lệnh đầu tiên không phải comment (%%) và không rỗng để xác định từ khóa
     lines = cleaned.splitlines()
     first_keyword = None
     for line in lines:
@@ -59,7 +162,45 @@ def clean_and_validate_mermaid(code: str) -> str:
             f"(nhận được: '{first_keyword}')."
         )
 
-    return cleaned
+    # Xác định kiểu sơ đồ hiệu dụng
+    norm_type = diagram_type.strip().lower() if diagram_type else ""
+    is_erd = (norm_type in ("erdiagram", "erd")) or (matched_keyword == "erDiagram")
+    is_seq = (norm_type in ("sequencediagram", "sequence")) or (matched_keyword == "sequenceDiagram")
+
+    # 4. Áp dụng quy tắc làm sạch theo từng loại sơ đồ
+    processed_lines: List[str] = []
+
+    if is_erd:
+        in_entity_block = False
+        for line in lines:
+            stripped = line.strip()
+            if "{" in stripped and "}" in stripped:
+                # Khối thực thể trên cùng 1 dòng
+                prefix, rest = line.split("{", 1)
+                body, suffix = rest.rsplit("}", 1)
+                cleaned_body = re.sub(r'([a-zA-Z0-9_]+)\s*\([^)]*\)', r'\1', body)
+                cleaned_body = re.sub(r',\s*$', '', cleaned_body.strip()).replace(',', ' ')
+                tokens = cleaned_body.split()
+                processed_lines.append(f"{prefix}{{ {' '.join(tokens)} }}{suffix}")
+            elif "{" in stripped:
+                in_entity_block = True
+                processed_lines.append(line)
+            elif "}" in stripped:
+                in_entity_block = False
+                processed_lines.append(line)
+            elif in_entity_block:
+                processed_lines.append(_clean_erd_attribute_line(line))
+            else:
+                processed_lines.append(line)
+    elif is_seq:
+        for line in lines:
+            cleaned_line = _clean_seq_participant_line(line)
+            cleaned_line = _clean_seq_message_line(cleaned_line)
+            processed_lines.append(cleaned_line)
+    else:
+        processed_lines = lines
+
+    return "\n".join(processed_lines)
 
 
 def validate_sql_ddl(sql_code: str, dialect: str = "postgres") -> Tuple[bool, str]:

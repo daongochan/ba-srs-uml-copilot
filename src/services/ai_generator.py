@@ -22,15 +22,22 @@ CÁC NGUYÊN TẮC BẮT BUỘC:
      + then: Kết quả mong đợi và trạng thái thay đổi của hệ thống.
    - non_functional_requirements: Tối thiểu 3-5 yêu cầu phi chức năng phân loại theo chuẩn ISO/IEC 25010 (Security, Performance, Scalability, Reliability, Usability...), có mô tả chi tiết và chỉ số đo lường (metric) định lượng cụ thể (ví dụ: SLA 99.9%, Response time < 200ms với 5000 CCU, Mã hóa AES-256,...).
 
-2. Thiết kế Sơ đồ Tuần tự (Mermaid Sequence Diagram):
+2. Thiết kế Sơ đồ Tuần tự (Mermaid Sequence Diagram) - QUY TẮC NGHIÊM NGẶT:
    - sequence_diagram_mermaid: BẮT BUỘC bắt đầu trực tiếp bằng từ khóa 'sequenceDiagram'.
    - Minh họa trực quan và logic luồng nghiệp vụ quan trọng nhất (Happy path và nhánh ngoại lệ/thanh toán).
-   - Sử dụng cú pháp Mermaid chuẩn: `autonumber`, khai báo `actor` và `participant`, thông điệp đồng bộ/bất đồng bộ (`->>`, `-->>`), khối `alt / else` hoặc `opt` phân nhánh.
-   - Không chứa bất kỳ thẻ markdown thừa nào trong chuỗi.
+   - QUY TẮC BẮT BUỘC: Mọi participant/actor phải khai báo ID tiếng Anh viết liền và đặt tên tiếng Việt trong ngoặc kép (Ví dụ: `participant U as "Khach Hang"`, `actor C as "Nguoi Dung"`).
+   - Nội dung thông điệp sau dấu hai chấm `:` tuyệt đối KHÔNG được chứa dấu chấm phẩy `;` hay ngoặc nhọn `{}`.
+   - Sử dụng cú pháp Mermaid chuẩn: `autonumber`, thông điệp đồng bộ/bất đồng bộ (`->>`, `-->>`), khối `alt / else` hoặc `opt` phân nhánh.
+   - Không chứa bất kỳ thẻ markdown thừa nào trong chuỗi (như ```mermaid hoặc ```).
 
-3. Thiết kế Cơ sở dữ liệu Chuẩn 3NF & Sơ đồ ERD (Mermaid ER Diagram):
+3. Thiết kế Cơ sở dữ liệu Chuẩn 3NF & Sơ đồ ERD (Mermaid ER Diagram) - QUY TẮC NGHIÊM NGẶT:
    - er_diagram_mermaid: BẮT BUỘC bắt đầu trực tiếp bằng từ khóa 'erDiagram'.
    - Mô hình hóa các thực thể đạt Chuẩn dạng 3 (3NF): Loại bỏ trùng lặp dữ liệu (1NF), loại bỏ phụ thuộc một phần (2NF), loại bỏ triệt để phụ thuộc bắc cầu (3NF).
+   - Tên bảng chỉ dùng chữ cái tiếng Anh và dấu gạch dưới (snake_case hoặc UPPER_CASE).
+   - Bên trong khối `{ }`, mỗi dòng chỉ gồm: `<type> <attribute_name> <PK/FK> "<comment>"`
+   - Tuyệt đối KHÔNG viết kích thước trong ngoặc đơn ở kiểu dữ liệu (chỉ viết `varchar`, `int`, `decimal`, `timestamp`... - KHÔNG ĐƯỢC viết `varchar(50)` hay `decimal(10, 2)`).
+   - Tuyệt đối KHÔNG có dấu phẩy `,` ở cuối dòng bên trong khối `{ }`.
+   - Comment chú thích bắt buộc bọc trong dấu ngoặc kép `""` (Ví dụ: `varchar username PK "Ten dang nhap"`).
    - Khai báo các thực thể với thuộc tính, khóa chính (PK), khóa ngoại (FK) và mối quan hệ chính xác (ví dụ: ||--o{, ||--|{).
 
 4. Kịch bản SQL DDL (PostgreSQL / ANSI SQL Standard):
@@ -45,7 +52,7 @@ CÁC NGUYÊN TẮC BẮT BUỘC:
 def generate_srs_from_notes(raw_notes: str, api_key: str) -> SRSDocument:
     """Phân tích ghi chú họp khách hàng và sinh đặc tả SRS, sơ đồ UML và SQL DDL
 
-    sử dụng model gemini-2.5-flash với cơ chế ép kiểu Structured Output.
+    sử dụng model gemini-3.8-flash với cơ chế ép kiểu Structured Output.
 
     Args:
         raw_notes: Nội dung văn bản ghi chú họp khách hàng thô.
@@ -74,7 +81,7 @@ Hãy phân tích nghiệp vụ, chuẩn hóa theo IEEE 29148 & BABOK, thiết k�
 """
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3.8-flash",
         contents=user_prompt,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_INSTRUCTION,
@@ -92,13 +99,17 @@ Hãy phân tích nghiệp vụ, chuẩn hóa theo IEEE 29148 & BABOK, thiết k�
 
     # Tiền xử lý và làm sạch cú pháp Mermaid nếu có thẻ markdown bọc ngoài
     try:
-        doc.sequence_diagram_mermaid = clean_and_validate_mermaid(doc.sequence_diagram_mermaid)
+        doc.sequence_diagram_mermaid = clean_and_validate_mermaid(
+            doc.sequence_diagram_mermaid, diagram_type="sequenceDiagram"
+        )
     except Exception:
         # Nếu validator phát hiện lỗi nhẹ, giữ nguyên hoặc cố gắng chuẩn hóa
         pass
 
     try:
-        doc.er_diagram_mermaid = clean_and_validate_mermaid(doc.er_diagram_mermaid)
+        doc.er_diagram_mermaid = clean_and_validate_mermaid(
+            doc.er_diagram_mermaid, diagram_type="erDiagram"
+        )
     except Exception:
         pass
 

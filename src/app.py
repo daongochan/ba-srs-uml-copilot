@@ -2,6 +2,7 @@
 
 import os
 import re
+import json
 import streamlit as st
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
@@ -23,23 +24,66 @@ st.set_page_config(
 )
 
 
-def render_mermaid(mermaid_code: str, height: int = 550) -> None:
-    """Nhúng thư viện Mermaid.js từ CDN và render sơ đồ trực tiếp."""
+def render_mermaid(mermaid_code: str, height: int = 550, diagram_type: str = "") -> None:
+    """Nhúng thư viện Mermaid.js từ CDN và render sơ đồ an toàn qua API mermaid.render()
+    kết hợp json.dumps để tránh trình duyệt parse nhầm các ký tự mũi tên HTML.
+    """
     try:
-        clean_code = clean_and_validate_mermaid(mermaid_code)
+        clean_code = clean_and_validate_mermaid(mermaid_code, diagram_type=diagram_type)
     except Exception:
         clean_code = mermaid_code.strip()
 
-    # Escape HTML special chars if any, but keep newline/quotes intact for mermaid parser
+    code_json = json.dumps(clean_code)
+
     html_content = f"""
     <!DOCTYPE html>
     <html lang="vi">
     <head>
         <meta charset="utf-8">
         <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+        <style>
+            body {{
+                margin: 0;
+                padding: 16px;
+                background-color: #ffffff;
+                font-family: 'Inter', system-ui, -apple-system, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: flex-start;
+            }}
+            #mermaid-container {{
+                width: 100%;
+                display: flex;
+                justify-content: center;
+            }}
+            #mermaid-container svg {{
+                max-width: 100%;
+                height: auto;
+                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+                border-radius: 8px;
+                padding: 12px;
+                background: #ffffff;
+            }}
+            .mermaid-error {{
+                color: #b91c1c;
+                background-color: #fef2f2;
+                border: 1px solid #fecaca;
+                border-radius: 8px;
+                padding: 12px 16px;
+                font-family: monospace;
+                font-size: 13px;
+                white-space: pre-wrap;
+                width: 100%;
+            }}
+        </style>
+    </head>
+    <body>
+        <div id="mermaid-container">
+            <div style="color: #64748b; font-size: 14px;">Đang tải sơ đồ Mermaid...</div>
+        </div>
         <script>
             mermaid.initialize({{
-                startOnLoad: true,
+                startOnLoad: false,
                 theme: 'neutral',
                 themeVariables: {{
                     fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
@@ -52,35 +96,23 @@ def render_mermaid(mermaid_code: str, height: int = 550) -> None:
                 }},
                 securityLevel: 'loose'
             }});
+
+            async function renderDiagram() {{
+                const container = document.getElementById('mermaid-container');
+                const rawCode = {code_json};
+                const renderId = 'mermaid_svg_' + Math.random().toString(36).substring(2, 9);
+                try {{
+                    const {{ svg }} = await mermaid.render(renderId, rawCode);
+                    container.innerHTML = svg;
+                }} catch (err) {{
+                    console.error("Mermaid Render Error:", err);
+                    container.innerHTML = '<div class="mermaid-error"><strong>⚠️ Lỗi hiển thị Mermaid:</strong><br>' +
+                        (err.message || err) + '</div>';
+                }}
+            }}
+
+            renderDiagram();
         </script>
-        <style>
-            body {{
-                margin: 0;
-                padding: 16px;
-                background-color: #ffffff;
-                font-family: 'Inter', system-ui, sans-serif;
-                display: flex;
-                justify-content: center;
-                align-items: flex-start;
-            }}
-            .mermaid {{
-                width: 100%;
-                text-align: center;
-            }}
-            .mermaid svg {{
-                max-width: 100%;
-                height: auto;
-                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-                border-radius: 8px;
-                padding: 12px;
-                background: #ffffff;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="mermaid">
-{clean_code}
-        </div>
     </body>
     </html>
     """
@@ -202,7 +234,7 @@ with st.sidebar:
     - 🏛️ **BABOK v3:** Business Analysis Body of Knowledge
     - 🔄 **Gherkin BDD:** Given - When - Then
     - 🗄️ **3NF:** Third Normal Form (Boyce-Codd)
-    - ⚡ **Model:** `gemini-2.5-flash`
+    - ⚡ **Model:** `gemini-3.8-flash`
     """)
 
 # -------------------------------------------------------------
@@ -326,7 +358,7 @@ if doc:
         st.markdown("#### 🔄 Sơ đồ Tuần tự Nghiệp vụ Trọng tâm (UML Sequence Diagram)")
         st.caption("Minh họa luồng tương tác giữa các tác nhân và thành phần hệ thống theo thời gian.")
 
-        render_mermaid(doc.sequence_diagram_mermaid, height=560)
+        render_mermaid(doc.sequence_diagram_mermaid, height=560, diagram_type="sequenceDiagram")
 
         with st.expander("📄 Xem mã nguồn Mermaid Sequence Diagram"):
             st.code(doc.sequence_diagram_mermaid, language="mermaid")
@@ -338,7 +370,7 @@ if doc:
         with col_erd:
             st.markdown("#### 🗄️ Sơ đồ Thực thể Quan hệ Chuẩn 3NF")
             st.caption("Triệt tiêu phụ thuộc từng phần (2NF) và phụ thuộc bắc cầu (3NF).")
-            render_mermaid(doc.er_diagram_mermaid, height=560)
+            render_mermaid(doc.er_diagram_mermaid, height=560, diagram_type="erDiagram")
 
             with st.expander("📄 Xem mã nguồn Mermaid ERD"):
                 st.code(doc.er_diagram_mermaid, language="mermaid")

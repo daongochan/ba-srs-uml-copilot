@@ -88,11 +88,22 @@ class SRSDocument(BaseModel):
     )
     sequence_diagram_mermaid: str = Field(
         ...,
-        description="Mã nguồn sơ đồ tuần tự Mermaid (Sequence Diagram) minh họa luồng nghiệp vụ trọng tâm",
+        description=(
+            "Mã nguồn sơ đồ tuần tự Mermaid (Sequence Diagram) minh họa luồng nghiệp vụ trọng tâm. "
+            "Bắt buộc bắt đầu bằng 'sequenceDiagram'. "
+            "Mọi participant phải khai báo ID tiếng Anh viết liền và đặt tên tiếng Việt trong ngoặc kép (VD: participant U as \"Khach Hang\"). "
+            "Nội dung thông điệp sau dấu hai chấm ':' không được chứa dấu chấm phẩy ';' hay ngoặc nhọn '{}'."
+        ),
     )
     er_diagram_mermaid: str = Field(
         ...,
-        description="Mã nguồn sơ đồ thực thể quan hệ Mermaid (Entity Relationship Diagram - 3NF)",
+        description=(
+            "Mã nguồn sơ đồ thực thể quan hệ Mermaid (Entity Relationship Diagram - 3NF). "
+            "Bắt buộc bắt đầu bằng 'erDiagram'. "
+            "Tên bảng chỉ dùng chữ cái tiếng Anh và dấu gạch dưới. "
+            "Bên trong khối '{ }', mỗi dòng chỉ gồm: <type> <attribute_name> <PK/FK> \"<comment>\" "
+            "(Tuyệt đối KHÔNG viết varchar(50) mà chỉ viết varchar, KHÔNG có dấu phẩy cuối dòng, comment bắt buộc bọc trong dấu ngoặc kép \"\")."
+        ),
     )
     sql_ddl_script: str = Field(
         ...,

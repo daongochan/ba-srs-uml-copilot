@@ -45,6 +45,74 @@ erDiagram
         cleaned = clean_and_validate_mermaid(raw_code)
         assert cleaned == raw_code.strip()
 
+    def test_clean_er_diagram_removes_data_type_sizes_and_commas(self):
+        raw_code = """```mermaid
+erDiagram
+    CUSTOMER {
+        int(11) id PK,
+        varchar(150) username "Tên đăng nhập",
+        varchar(255) email,
+        decimal(10, 2) balance,
+        timestamp created_at,
+    }
+    TICKET {
+        int ticket_id PK,
+        int customer_id FK,
+        numeric(12, 4) price "Giá vé (VNĐ)",
+    }
+    CUSTOMER ||--o{ TICKET : owns
+```"""
+        cleaned = clean_and_validate_mermaid(raw_code, diagram_type="erDiagram")
+        # Kiểm tra không còn kích thước trong ngoặc đơn ở kiểu dữ liệu
+        assert "varchar(150)" not in cleaned
+        assert "decimal(10, 2)" not in cleaned
+        assert "int(11)" not in cleaned
+        assert "numeric(12, 4)" not in cleaned
+        # Kiểm tra kiểu dữ liệu đã được làm sạch
+        assert "int id PK" in cleaned
+        assert 'varchar username "Tên đăng nhập"' in cleaned
+        assert "varchar email" in cleaned
+        assert "decimal balance" in cleaned
+        assert "timestamp created_at" in cleaned
+        assert 'numeric price "Giá vé (VNĐ)"' in cleaned
+        # Đảm bảo không còn dấu phẩy ở cuối dòng thuộc tính
+        for line in cleaned.splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("erDiagram") and not stripped.endswith("{") and not stripped.endswith("}"):
+                if "PK" in stripped or "FK" in stripped or "varchar" in stripped:
+                    assert not stripped.endswith(","), f"Dòng vẫn còn dấu phẩy: {stripped}"
+
+    def test_clean_mermaid_escaped_newlines(self):
+        raw_code = "sequenceDiagram\\nautonumber\\nactor User as Khách hàng\\nUser->>Web: Chọn ghế ngồi"
+        cleaned = clean_and_validate_mermaid(raw_code)
+        assert "\n" in cleaned
+        assert "\\n" not in cleaned
+        assert cleaned.startswith("sequenceDiagram")
+        assert 'actor User as "Khách hàng"' in cleaned
+
+    def test_clean_sequence_diagram_participant_quoting(self):
+        raw_code = """sequenceDiagram
+    actor Khách hàng
+    participant Web as Giao diện Web
+    participant Server as Backend API
+    actor User as "Người Dùng"
+    participant DB
+    User->>Web: Đăng nhập;
+    Web->>Server: Gửi {username, password};
+    Server->>DB: Truy vấn dữ liệu;
+"""
+        cleaned = clean_and_validate_mermaid(raw_code, diagram_type="sequenceDiagram")
+        # Kiểm tra format ID as "Display Name"
+        assert 'actor Khach_hang as "Khách hàng"' in cleaned
+        assert 'participant Web as "Giao diện Web"' in cleaned
+        assert 'participant Server as "Backend API"' in cleaned
+        assert 'actor User as "Người Dùng"' in cleaned
+        assert "participant DB" in cleaned
+        # Kiểm tra nội dung message đã loại bỏ ';' và '{}'
+        assert "User->>Web: Đăng nhập" in cleaned
+        assert "Web->>Server: Gửi (username, password)" in cleaned
+        assert "Server->>DB: Truy vấn dữ liệu" in cleaned
+
     def test_mermaid_with_leading_comments(self):
         raw_code = """%% This is a header comment
 %% Another author comment
