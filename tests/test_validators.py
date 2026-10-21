@@ -7,6 +7,12 @@ from src.validators.syntax_validator import (
 )
 from src.validators.db_sandbox import execute_and_audit_ddl
 from src.validators.requirements_linter import evaluate_srs_deterministically
+from src.validators.consistency_checker import (
+    extract_ddl_tables,
+    extract_erd_entities,
+    audit_cross_model_consistency,
+    auto_sync_rtm_and_erd_with_ddl,
+)
 from src.models.srs_schema import (
     AcceptanceCriterion,
     FunctionalRequirement,
@@ -692,5 +698,170 @@ class TestRequirementsLinter:
         """Xác nhận evaluate_srs_deterministically raise ValueError nếu doc là None."""
         with pytest.raises(ValueError, match="không được để trống"):
             evaluate_srs_deterministically(None)
+
+
+class TestCrossModelConsistency:
+    """Test suite for Cross-Model Consistency Verifier between RTM, ERD, and SQL DDL."""
+
+    def test_cross_model_consistency_fully_synced(self):
+        """Test case 1: RTM chứa ['users', 'orders'], ERD chứa USERS và ORDERS,
+        SQL DDL chứa CREATE TABLE users... CREATE TABLE orders...
+        -> Xác nhận consistency_score == 100 và is_fully_synced == True.
+        """
+        doc = SRSDocument(
+            project_title="E-Commerce Core",
+            business_objective="Quản lý người dùng và đơn đặt hàng.",
+            actors=["Customer", "Admin"],
+            functional_requirements=[
+                FunctionalRequirement(
+                    req_id="FR-01",
+                    title="Đăng ký tài khoản",
+                    user_story="Là một khách hàng, tôi muốn đăng ký tài khoản để mua sắm.",
+                    priority="High",
+                    acceptance_criteria=[
+                        AcceptanceCriterion(
+                            given="Chưa có tài khoản",
+                            when="Điền email và mật khẩu",
+                            then="Hệ thống tạo tài khoản và gửi email xác nhận.",
+                        )
+                    ],
+                ),
+                FunctionalRequirement(
+                    req_id="FR-02",
+                    title="Tạo đơn hàng",
+                    user_story="Là một khách hàng, tôi muốn đặt hàng để mua sản phẩm.",
+                    priority="High",
+                    acceptance_criteria=[
+                        AcceptanceCriterion(
+                            given="Giỏ hàng có sản phẩm",
+                            when="Bấm đặt hàng",
+                            then="Hệ thống lưu đơn hàng và chuyển sang cổng thanh toán.",
+                        )
+                    ],
+                ),
+            ],
+            non_functional_requirements=[
+                NonFunctionalRequirement(
+                    category="Performance",
+                    description="Thời gian phản hồi đơn hàng",
+                    metric="Response time < 500ms cho 99% request.",
+                )
+            ],
+            sequence_diagram_mermaid="sequenceDiagram\n    participant U as \"User\"\n    U->>S: req",
+            er_diagram_mermaid="""erDiagram
+    USERS ||--o{ ORDERS : places
+    USERS {
+        int id PK "Khóa chính"
+        string email "Email người dùng"
+    }
+    ORDERS {
+        int id PK "Mã đơn hàng"
+        int user_id FK "Khóa ngoại tham chiếu"
+    }
+""",
+            sql_ddl_script="""
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE
+);
+
+CREATE TABLE orders (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES users(id)
+);
+""",
+            traceability_matrix=[
+                TraceabilityItem(
+                    req_id="FR-01",
+                    feature_name="Quản lý Tài khoản",
+                    business_rule="Email là duy nhất",
+                    related_tables=["users"],
+                    test_scenario_summary="Kiểm thử đăng ký với email hợp lệ và email trùng",
+                ),
+                TraceabilityItem(
+                    req_id="FR-02",
+                    feature_name="Tạo Đơn Hàng",
+                    business_rule="Mỗi đơn hàng phải gắn với một người dùng hợp lệ",
+                    related_tables=["orders"],
+                    test_scenario_summary="Kiểm thử tạo đơn hàng thành công và đơn hàng không có user",
+                ),
+            ],
+        )
+
+        audit = audit_cross_model_consistency(doc)
+
+        assert audit["is_fully_synced"] is True
+        assert audit["consistency_score"] == 100
+        assert audit["phantom_tables_in_rtm"] == []
+        assert audit["orphan_tables_in_ddl"] == []
+        assert audit["missing_in_erd"] == []
+        assert set(audit["ddl_tables"]) == {"users", "orders"}
+        assert set(audit["rtm_tables"]) == {"users", "orders"}
+        assert set(audit["erd_entities"]) == {"users", "orders"}
+
+    def test_cross_model_consistency_phantom_rtm_and_orphan_ddl(self):
+        """Test case 2: RTM chứa bảng 'auditoriums' nhưng SQL DDL lại đặt tên là 'cinema_halls'
+        -> Xác nhận phantom_tables_in_rtm == ['auditoriums'] và orphan_tables_in_ddl == ['cinema_halls'].
+        """
+        doc = SRSDocument(
+            project_title="Cinema Booking System",
+            business_objective="Hệ thống đặt vé xem phim trực tuyến.",
+            actors=["Moviegoer"],
+            functional_requirements=[
+                FunctionalRequirement(
+                    req_id="FR-01",
+                    title="Chọn phòng chiếu",
+                    user_story="Là một khách hàng, tôi muốn xem sơ đồ phòng chiếu để chọn ghế.",
+                    priority="High",
+                    acceptance_criteria=[
+                        AcceptanceCriterion(
+                            given="Đã chọn suất chiếu",
+                            when="Xem sơ đồ phòng chiếu",
+                            then="Hệ thống hiển thị trạng thái ghế theo thời gian thực.",
+                        )
+                    ],
+                )
+            ],
+            non_functional_requirements=[],
+            sequence_diagram_mermaid="sequenceDiagram\n    actor U as \"U\"\n    U->>S: req",
+            er_diagram_mermaid="""erDiagram
+    AUDITORIUMS {
+        int id PK
+    }
+""",
+            sql_ddl_script="""
+CREATE TABLE cinema_halls (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL
+);
+""",
+            traceability_matrix=[
+                TraceabilityItem(
+                    req_id="FR-01",
+                    feature_name="Sơ đồ Phòng chiếu",
+                    business_rule="Tải sơ đồ ghế theo phòng",
+                    related_tables=["auditoriums"],  # Phantom table
+                    test_scenario_summary="Kiểm thử tải danh sách ghế theo phòng chiếu",
+                )
+            ],
+        )
+
+        audit = audit_cross_model_consistency(doc)
+
+        assert audit["phantom_tables_in_rtm"] == ["auditoriums"]
+        assert audit["orphan_tables_in_ddl"] == ["cinema_halls"]
+        assert audit["is_fully_synced"] is False
+        assert audit["consistency_score"] < 100
+
+        # Kiểm tra thêm hàm auto_sync_rtm_and_erd_with_ddl
+        synced_doc = auto_sync_rtm_and_erd_with_ddl(doc)
+        synced_audit = audit_cross_model_consistency(synced_doc)
+
+        assert synced_audit["is_fully_synced"] is True
+        assert synced_audit["consistency_score"] == 100
+        assert synced_audit["phantom_tables_in_rtm"] == []
+        assert synced_audit["orphan_tables_in_ddl"] == []
+        assert "cinema_halls" in synced_doc.traceability_matrix[0].related_tables
+        assert "CINEMA_HALLS" in synced_doc.er_diagram_mermaid or "cinema_halls" in synced_doc.er_diagram_mermaid.lower()
 
 

@@ -21,6 +21,10 @@ from src.data.sample_inputs import SAMPLE_SCENARIOS
 from src.validators.syntax_validator import clean_and_validate_mermaid, validate_sql_ddl
 from src.validators.db_sandbox import execute_and_audit_ddl
 from src.validators.requirements_linter import evaluate_srs_deterministically
+from src.validators.consistency_checker import (
+    audit_cross_model_consistency,
+    auto_sync_rtm_and_erd_with_ddl,
+)
 
 
 
@@ -42,10 +46,10 @@ for ss_key in ["srs_result", "doc"]:
             st.session_state.pop(ss_key, None)
 
 
-def render_mermaid(mermaid_code: str, height: int = 550, diagram_type: str = "") -> None:
-    """Nhúng thư viện Mermaid.js từ CDN và render sơ đồ an toàn qua API mermaid.render()
-    kết hợp json.dumps và cơ chế Lazy Visibility Rendering (ResizeObserver/IntersectionObserver)
-    để tránh lỗi render SVG khi nằm trong Streamlit tab đang ẩn (offsetWidth == 0).
+def render_mermaid(mermaid_code: str, height: int = 560, diagram_type: str = "") -> None:
+    """Nhúng thư viện Mermaid.js từ CDN và render sơ đồ tương tác (Interactive SVG Canvas)
+    với thanh công cụ nổi (Zoom In, Zoom Out, Reset, Download SVG), hỗ trợ kéo rê (Pan)
+    và phóng to thu nhỏ (Zoom), kết hợp cơ chế Lazy Visibility Rendering để tránh lỗi khi tab đang ẩn.
     """
     try:
         clean_code = clean_and_validate_mermaid(mermaid_code, diagram_type=diagram_type)
@@ -61,51 +65,199 @@ def render_mermaid(mermaid_code: str, height: int = 550, diagram_type: str = "")
         <meta charset="utf-8">
         <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
         <style>
+            * {{
+                box-sizing: border-box;
+            }}
             body {{
                 margin: 0;
-                padding: 16px;
-                background-color: #ffffff;
+                padding: 0;
+                background-color: #f8fafc;
                 font-family: 'Inter', system-ui, -apple-system, sans-serif;
-                display: flex;
-                justify-content: center;
-                align-items: flex-start;
+                overflow: hidden;
+                width: 100vw;
+                height: 100vh;
+            }}
+            #viewport {{
+                position: relative;
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                cursor: grab;
+                user-select: none;
+            }}
+            #viewport.dragging {{
+                cursor: grabbing;
+            }}
+            #canvas-wrapper {{
+                position: absolute;
+                top: 0;
+                left: 0;
+                transform-origin: 0 0;
+                display: inline-block;
+                padding: 24px;
             }}
             #mermaid-container {{
-                width: 100%;
-                display: flex;
-                justify-content: center;
+                display: inline-block;
             }}
             #mermaid-container svg {{
-                max-width: 100%;
-                height: auto;
-                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+                display: block;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
                 border-radius: 8px;
                 padding: 12px;
                 background: #ffffff;
+            }}
+            #toolbar {{
+                position: absolute;
+                top: 12px;
+                right: 12px;
+                z-index: 100;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                background: rgba(255, 255, 255, 0.95);
+                backdrop-filter: blur(6px);
+                padding: 4px 8px;
+                border-radius: 8px;
+                border: 1px solid #cbd5e1;
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+            }}
+            .tool-btn {{
+                background: #f8fafc;
+                border: 1px solid #cbd5e1;
+                color: #1e293b;
+                font-size: 12px;
+                font-weight: 600;
+                padding: 4px 8px;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: all 0.15s ease;
+                user-select: none;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }}
+            .tool-btn:hover {{
+                background: #e2e8f0;
+                border-color: #94a3b8;
+            }}
+            .tool-btn:active {{
+                background: #cbd5e1;
+            }}
+            #zoom-indicator {{
+                font-size: 12px;
+                font-weight: 600;
+                color: #475569;
+                min-width: 42px;
+                text-align: center;
             }}
             .mermaid-error {{
                 color: #b91c1c;
                 background-color: #fef2f2;
                 border: 1px solid #fecaca;
                 border-radius: 8px;
-                padding: 12px 16px;
+                padding: 16px;
                 font-family: monospace;
                 font-size: 13px;
                 white-space: pre-wrap;
-                width: 100%;
+                margin: 20px;
             }}
         </style>
     </head>
     <body>
-        <div id="mermaid-container">
-            <div style="color: #64748b; font-size: 14px;">Đang tải sơ đồ Mermaid...</div>
+        <div id="viewport">
+            <div id="toolbar">
+                <button class="tool-btn" id="btn-zoom-in" title="Phóng to (Ctrl + Cuộn chuột)">➕</button>
+                <button class="tool-btn" id="btn-zoom-out" title="Thu nhỏ (Ctrl + Cuộn chuột)">➖</button>
+                <span id="zoom-indicator">100%</span>
+                <button class="tool-btn" id="btn-reset" title="Đặt lại góc nhìn (Reset 100%)">🔄 Reset</button>
+                <button class="tool-btn" id="btn-download" title="Tải ảnh vector SVG chất lượng cao">⬇️ Tải SVG</button>
+            </div>
+            <div id="canvas-wrapper">
+                <div id="mermaid-container">
+                    <div style="color: #64748b; font-size: 14px; padding: 20px;">Đang tải sơ đồ Mermaid...</div>
+                </div>
+            </div>
         </div>
+
         <script>
             mermaid.initialize({{
                 startOnLoad: false,
                 theme: 'default',
                 securityLevel: 'loose'
             }});
+
+            let scale = 1.0;
+            let pointX = 0;
+            let pointY = 0;
+            let isPanning = false;
+            let startX = 0;
+            let startY = 0;
+            let rendered = false;
+            let resizeObserver = null;
+            let intersectionObserver = null;
+
+            function updateTransform() {{
+                const wrapper = document.getElementById('canvas-wrapper');
+                if (!wrapper) return;
+                wrapper.style.transform = 'translate(' + pointX + 'px, ' + pointY + 'px) scale(' + scale + ')';
+                const indicator = document.getElementById('zoom-indicator');
+                if (indicator) {{
+                    indicator.innerText = Math.round(scale * 100) + '%';
+                }}
+            }}
+
+            function zoom(factor, clientX, clientY) {{
+                const viewport = document.getElementById('viewport');
+                const rect = viewport.getBoundingClientRect();
+                const cx = (clientX !== undefined) ? (clientX - rect.left) : (rect.width / 2);
+                const cy = (clientY !== undefined) ? (clientY - rect.top) : (rect.height / 2);
+
+                const oldScale = scale;
+                let newScale = scale * factor;
+                if (newScale < 0.2) newScale = 0.2;
+                if (newScale > 5.0) newScale = 5.0;
+
+                pointX = cx - (cx - pointX) * (newScale / oldScale);
+                pointY = cy - (cy - pointY) * (newScale / oldScale);
+                scale = newScale;
+                updateTransform();
+            }}
+
+            function resetView() {{
+                scale = 1.0;
+                const viewport = document.getElementById('viewport');
+                const container = document.getElementById('mermaid-container');
+                if (viewport && container && container.offsetWidth > 0) {{
+                    pointX = Math.max(16, (viewport.clientWidth - container.offsetWidth) / 2);
+                    pointY = 20;
+                }} else {{
+                    pointX = 20;
+                    pointY = 20;
+                }}
+                updateTransform();
+            }}
+
+            function downloadSVG() {{
+                const container = document.getElementById('mermaid-container');
+                const svgElem = container ? container.querySelector('svg') : null;
+                if (!svgElem) {{
+                    alert("Chưa có sơ đồ SVG để tải về.");
+                    return;
+                }}
+                const svgData = new XMLSerializer().serializeToString(svgElem);
+                const blob = new Blob([svgData], {{ type: 'image/svg+xml;charset=utf-8' }});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'mermaid_diagram_' + Date.now() + '.svg';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }}
 
             async function renderDiagram() {{
                 const container = document.getElementById('mermaid-container');
@@ -114,16 +266,13 @@ def render_mermaid(mermaid_code: str, height: int = 550, diagram_type: str = "")
                 try {{
                     const {{ svg }} = await mermaid.render(renderId, rawCode);
                     container.innerHTML = svg;
+                    setTimeout(resetView, 60);
                 }} catch (err) {{
                     console.error("Mermaid Render Error:", err);
                     container.innerHTML = '<div class="mermaid-error"><strong>⚠️ Lỗi hiển thị Mermaid:</strong><br>' +
                         (err.message || err) + '</div>';
                 }}
             }}
-
-            let rendered = false;
-            let resizeObserver = null;
-            let intersectionObserver = null;
 
             function cleanupObservers() {{
                 if (resizeObserver) {{
@@ -138,36 +287,83 @@ def render_mermaid(mermaid_code: str, height: int = 550, diagram_type: str = "")
 
             function checkAndRender() {{
                 if (rendered) return;
+                const viewport = document.getElementById('viewport');
                 const container = document.getElementById('mermaid-container');
-                if (!container) return;
+                if (!viewport || !container) return;
 
-                // Chỉ render khi tab đã hiển thị thực tế trên cây render (offsetWidth > 0)
-                if (document.body.offsetWidth > 0 && container.offsetWidth > 0) {{
+                if (document.body.offsetWidth > 0 && viewport.offsetWidth > 0) {{
                     rendered = true;
                     cleanupObservers();
                     renderDiagram();
                 }}
             }}
 
-            const container = document.getElementById('mermaid-container');
+            // Gắn sự kiện Pan kéo thả chuột
+            const viewport = document.getElementById('viewport');
+            viewport.addEventListener('mousedown', (e) => {{
+                if (e.target.closest('#toolbar')) return;
+                isPanning = true;
+                startX = e.clientX - pointX;
+                startY = e.clientY - pointY;
+                viewport.classList.add('dragging');
+            }});
 
-            // 1. Nếu đang ở Tab hiển thị sẵn (active tab) -> gọi render ngay
-            if (document.body.offsetWidth > 0 && container && container.offsetWidth > 0) {{
+            window.addEventListener('mousemove', (e) => {{
+                if (!isPanning) return;
+                pointX = e.clientX - startX;
+                pointY = e.clientY - startY;
+                updateTransform();
+            }});
+
+            window.addEventListener('mouseup', () => {{
+                if (isPanning) {{
+                    isPanning = false;
+                    viewport.classList.remove('dragging');
+                }}
+            }});
+
+            // Phóng to thu nhỏ bằng con lăn chuột (Wheel Zoom / Ctrl + Wheel)
+            viewport.addEventListener('wheel', (e) => {{
+                e.preventDefault();
+                const factor = e.deltaY < 0 ? 1.15 : 0.87;
+                zoom(factor, e.clientX, e.clientY);
+            }}, {{ passive: false }});
+
+            // Gắn sự kiện thanh công cụ
+            document.getElementById('btn-zoom-in').addEventListener('click', (e) => {{
+                e.stopPropagation();
+                zoom(1.2);
+            }});
+            document.getElementById('btn-zoom-out').addEventListener('click', (e) => {{
+                e.stopPropagation();
+                zoom(1 / 1.2);
+            }});
+            document.getElementById('btn-reset').addEventListener('click', (e) => {{
+                e.stopPropagation();
+                resetView();
+            }});
+            document.getElementById('btn-download').addEventListener('click', (e) => {{
+                e.stopPropagation();
+                downloadSVG();
+            }});
+
+            // 1. Nếu đang ở Tab hiển thị sẵn -> gọi render ngay
+            if (document.body.offsetWidth > 0 && viewport && viewport.offsetWidth > 0) {{
                 rendered = true;
                 renderDiagram();
             }} else {{
-                // 2. Nếu nằm trong Tab ẩn của Streamlit (offsetWidth == 0) -> theo dõi khi Tab được click mở
+                // 2. Nếu nằm trong Tab ẩn của Streamlit -> theo dõi khi Tab được click mở
                 if (window.ResizeObserver) {{
                     resizeObserver = new ResizeObserver(() => {{
                         checkAndRender();
                     }});
                     resizeObserver.observe(document.body);
-                    if (container) {{
-                        resizeObserver.observe(container);
+                    if (viewport) {{
+                        resizeObserver.observe(viewport);
                     }}
                 }}
 
-                if (window.IntersectionObserver && container) {{
+                if (window.IntersectionObserver && viewport) {{
                     intersectionObserver = new IntersectionObserver((entries) => {{
                         for (const entry of entries) {{
                             if (entry.isIntersecting || entry.intersectionRatio > 0) {{
@@ -175,17 +371,16 @@ def render_mermaid(mermaid_code: str, height: int = 550, diagram_type: str = "")
                             }}
                         }}
                     }});
-                    intersectionObserver.observe(container);
+                    intersectionObserver.observe(viewport);
                 }}
 
-                // Dự phòng khi trình duyệt thay đổi kích thước
                 window.addEventListener('resize', checkAndRender);
             }}
         </script>
     </body>
     </html>
     """
-    components.html(html_content, height=height, scrolling=True)
+    components.html(html_content, height=height, scrolling=False)
 
 # -------------------------------------------------------------
 # SIDEBAR
@@ -471,6 +666,55 @@ if doc:
             ]
             st.dataframe(rtm_table, use_container_width=True, hide_index=True)
 
+        # Kiểm định Tính Nhất quán Liên Mô hình (Cross-Artifact Consistency: RTM ↔ ERD ↔ SQL)
+        st.divider()
+        st.markdown("#### 🔗 Kiểm định Tính Nhất quán Liên Mô hình (Cross-Artifact Consistency: RTM ↔ ERD ↔ SQL)")
+        st.caption("Đối chiếu tập hợp thực thể trên cả 3 tầng: Ma trận RTM (Tab 1), Sơ đồ ERD 3NF (Tab 3), và Kịch bản SQL DDL (Tab 3) bằng lý thuyết Đại số Tập hợp.")
+
+        consistency_audit = audit_cross_model_consistency(doc)
+        c_col1, c_col2, c_col3, c_col4 = st.columns(4)
+        with c_col1:
+            score = consistency_audit["consistency_score"]
+            st.metric(
+                "Đồng bộ Liên Mô hình",
+                f"{score}%",
+                delta="100% Đồng nhất" if score == 100 else f"Lệch {100 - score}%",
+                delta_color="normal" if score == 100 else "inverse",
+            )
+        with c_col2:
+            st.metric("Tập Bảng RTM (T_RTM)", f"{len(consistency_audit['rtm_tables'])} Bảng")
+        with c_col3:
+            st.metric("Thực thể ERD (T_ERD)", f"{len(consistency_audit['erd_entities'])} Thực thể")
+        with c_col4:
+            st.metric("Bảng Vật lý DDL (T_DDL)", f"{len(consistency_audit['ddl_tables'])} Bảng")
+
+        if not consistency_audit["is_fully_synced"]:
+            phantom = consistency_audit.get("phantom_tables_in_rtm", [])
+            orphan = consistency_audit.get("orphan_tables_in_ddl", [])
+            missing_erd = consistency_audit.get("missing_in_erd", [])
+
+            warning_msgs = []
+            if phantom:
+                warning_msgs.append(f"**Bảng có trong RTM nhưng thiếu trong SQL DDL (Phantom Tables):** `{', '.join(phantom)}`")
+            if orphan:
+                warning_msgs.append(f"**Bảng có trong SQL DDL nhưng chưa gán trong RTM (Orphan Tables):** `{', '.join(orphan)}`")
+            if missing_erd:
+                warning_msgs.append(f"**Bảng trong SQL DDL chưa được vẽ trong ERD (Missing in ERD):** `{', '.join(missing_erd)}`")
+
+            st.warning(
+                "⚠️ **Phát hiện sự không nhất quán giữa các tầng đặc tả:**\n\n" +
+                "\n\n".join(f"- {msg}" for msg in warning_msgs)
+            )
+
+            if st.button("🔄 Tự động Đồng bộ Hóa Tên Bảng Liên Mô hình (Auto-Sync Artifacts)", key="btn_sync_artifacts_tab1", type="primary"):
+                synced_doc = auto_sync_rtm_and_erd_with_ddl(doc)
+                st.session_state["srs_result"] = synced_doc
+                st.session_state["live_workbench_erd"] = synced_doc.er_diagram_mermaid
+                st.toast("✅ Đã tự động đồng bộ hóa bảng giữa RTM, ERD và SQL DDL!", icon="🔄")
+                st.rerun()
+        else:
+            st.success("✅ **100% Nhất quán Liên Mô hình:** Tất cả các bảng trong Ma trận RTM, Sơ đồ ERD và Kịch bản SQL DDL hoàn toàn đồng nhất!")
+
     # ---------------- TAB 2: UML DYNAMIC MODELS (SEQUENCE & STATE MACHINE) ----------------
     with tab2:
         st.markdown("#### 🔄 Sơ đồ Tuần tự Nghiệp vụ Trọng tâm (UML Sequence Diagram)")
@@ -693,6 +937,55 @@ if doc:
                 with st.expander("ℹ️ Cảnh báo chuyển đổi chỉ mục (Index Warnings)", expanded=False):
                     for w in db_audit["warnings"]:
                         st.caption(f"⚠️ {w}")
+
+            # 4. Kiểm định Tính Nhất quán Liên Mô hình (Cross-Artifact Consistency: RTM ↔ ERD ↔ SQL)
+            st.divider()
+            st.markdown("#### 🔗 Kiểm định Tính Nhất quán Liên Mô hình (Cross-Artifact Consistency: RTM ↔ ERD ↔ SQL)")
+            st.caption("Đối chiếu tập hợp thực thể trên cả 3 tầng: Ma trận RTM (Tab 1), Sơ đồ ERD 3NF (Tab 3), và Kịch bản SQL DDL (Tab 3) bằng lý thuyết Đại số Tập hợp.")
+
+            consistency_audit = audit_cross_model_consistency(doc)
+            c3_col1, c3_col2, c3_col3, c3_col4 = st.columns(4)
+            with c3_col1:
+                score = consistency_audit["consistency_score"]
+                st.metric(
+                    "Đồng bộ Liên Mô hình",
+                    f"{score}%",
+                    delta="100% Đồng nhất" if score == 100 else f"Lệch {100 - score}%",
+                    delta_color="normal" if score == 100 else "inverse",
+                )
+            with c3_col2:
+                st.metric("Tập Bảng RTM (T_RTM)", f"{len(consistency_audit['rtm_tables'])} Bảng")
+            with c3_col3:
+                st.metric("Thực thể ERD (T_ERD)", f"{len(consistency_audit['erd_entities'])} Thực thể")
+            with c3_col4:
+                st.metric("Bảng Vật lý DDL (T_DDL)", f"{len(consistency_audit['ddl_tables'])} Bảng")
+
+            if not consistency_audit["is_fully_synced"]:
+                phantom = consistency_audit.get("phantom_tables_in_rtm", [])
+                orphan = consistency_audit.get("orphan_tables_in_ddl", [])
+                missing_erd = consistency_audit.get("missing_in_erd", [])
+
+                warning_msgs = []
+                if phantom:
+                    warning_msgs.append(f"**Bảng có trong RTM nhưng thiếu trong SQL DDL (Phantom Tables):** `{', '.join(phantom)}`")
+                if orphan:
+                    warning_msgs.append(f"**Bảng có trong SQL DDL nhưng chưa gán trong RTM (Orphan Tables):** `{', '.join(orphan)}`")
+                if missing_erd:
+                    warning_msgs.append(f"**Bảng trong SQL DDL chưa được vẽ trong ERD (Missing in ERD):** `{', '.join(missing_erd)}`")
+
+                st.warning(
+                    "⚠️ **Phát hiện sự không nhất quán giữa các tầng đặc tả:**\n\n" +
+                    "\n\n".join(f"- {msg}" for msg in warning_msgs)
+                )
+
+                if st.button("🔄 Tự động Đồng bộ Hóa Tên Bảng Liên Mô hình (Auto-Sync Artifacts)", key="btn_sync_artifacts_tab3", type="primary"):
+                    synced_doc = auto_sync_rtm_and_erd_with_ddl(doc)
+                    st.session_state["srs_result"] = synced_doc
+                    st.session_state["live_workbench_erd"] = synced_doc.er_diagram_mermaid
+                    st.toast("✅ Đã tự động đồng bộ hóa bảng giữa RTM, ERD và SQL DDL!", icon="🔄")
+                    st.rerun()
+            else:
+                st.success("✅ **100% Nhất quán Liên Mô hình:** Tất cả các bảng trong Ma trận RTM, Sơ đồ ERD và Kịch bản SQL DDL hoàn toàn đồng nhất!")
 
     # ---------------- TAB 4: ENTERPRISE EXPORT BUNDLE ----------------
     with tab4:
