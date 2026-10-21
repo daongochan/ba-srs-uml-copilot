@@ -14,6 +14,8 @@ from src.services.telemetry_cache import (
     default_srs_cache,
     execute_with_exponential_backoff,
 )
+from src.utils.security import MAX_MEETING_NOTES_LENGTH, sanitize_error_message
+
 
 SYSTEM_INSTRUCTION = """Bạn là một Principal Business Analyst (sở hữu chứng chỉ quốc tế IIBA CBAP) kiêm Senior Enterprise & Database Architect với hơn 15 năm kinh nghiệm.
 Nhiệm vụ của bạn là chuyển hóa các ghi chú thô từ buổi họp khách hàng (Meeting Notes) thành một bản Đặc tả Yêu cầu Phần mềm (SRS - Software Requirements Specification) hoàn chỉnh, chuẩn mực, chặt chẽ và sẵn sàng cho đội ngũ phát triển.
@@ -108,6 +110,11 @@ def generate_srs_with_telemetry(
     if not raw_notes or not raw_notes.strip():
         raise ValueError("Nội dung ghi chú họp khách hàng không được để trống.")
 
+    if len(raw_notes) > MAX_MEETING_NOTES_LENGTH:
+        raise ValueError(
+            f"Nội dung ghi chú họp vượt quá giới hạn an toàn ({MAX_MEETING_NOTES_LENGTH:,} ký tự). Vui lòng rút gọn nội dung."
+        )
+
     content_hash = compute_content_hash(raw_notes, model_name=model_name)
 
     # 1. Kiểm tra Bộ nhớ đệm (Cache Hit)
@@ -153,9 +160,14 @@ Hãy phân tích nghiệp vụ, chuẩn hóa theo IEEE 29148 & BABOK, thiết k�
             ),
         )
 
-    response, retry_attempts = execute_with_exponential_backoff(
-        _call_gemini, max_retries=3, base_delay=1.0
-    )
+    try:
+        response, retry_attempts = execute_with_exponential_backoff(
+            _call_gemini, max_retries=3, base_delay=1.0
+        )
+    except Exception as e:
+        safe_msg = sanitize_error_message(e, api_key=api_key)
+        raise RuntimeError(f"Lỗi khi gọi mô hình Gemini AI: {safe_msg}") from None
+
     latency_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
 
     if not response or not response.text:

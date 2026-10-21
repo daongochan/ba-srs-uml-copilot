@@ -155,3 +155,13 @@ def test_app_load_sample_scenario():
     assert not at.exception
     raw_notes = at.session_state.get("raw_notes_input", "")
     assert "Xe khách" in raw_notes or "Phương Nam" in raw_notes
+
+
+def test_app_meeting_notes_input_has_max_chars_guardrail():
+    """Verify that the raw meeting notes text area enforces max_chars guardrail of 50,000."""
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    assert len(at.text_area) >= 1
+    assert at.text_area[0].proto.max_chars == 50000
+
+

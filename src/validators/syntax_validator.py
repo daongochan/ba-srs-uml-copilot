@@ -143,7 +143,11 @@ def clean_and_validate_mermaid(code: str, diagram_type: str = "") -> str:
     lines = [line for line in raw_lines if "```" not in line]
     cleaned = "\n".join(lines).strip()
 
-    if not cleaned:
+    # 2b. Loại bỏ các thẻ script hoặc javascript: URL độc hại để tăng cường bảo mật
+    cleaned = re.sub(r"<\s*script[^>]*>.*?<\s*/\s*script\s*>", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
+    cleaned = re.sub(r"javascript\s*:", "", cleaned, flags=re.IGNORECASE)
+
+    if not cleaned.strip():
         raise ValueError("Mã Mermaid không chứa cú pháp hợp lệ.")
 
     # 3. Tìm dòng lệnh đầu tiên không phải comment (%%) và không rỗng để xác định từ khóa

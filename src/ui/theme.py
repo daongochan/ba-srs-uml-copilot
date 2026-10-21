@@ -3,8 +3,10 @@
 Based on UI/UX Pro Max Design Intelligence (Tech & SaaS -> Developer Tool / IDE & B2B Service).
 """
 
+import html
 from typing import List, Dict, Any, Optional
 import streamlit as st
+
 
 
 def apply_custom_theme() -> None:
@@ -595,10 +597,15 @@ def render_bento_card(
     icon: Optional[str] = None,
 ) -> str:
     """Tạo mã HTML cho một thẻ Bento KPI Card."""
-    icon_str = f"{icon} " if icon else ""
+    safe_title = html.escape(str(title))
+    safe_value = html.escape(str(value))
+    safe_subtitle = html.escape(str(subtitle))
+    icon_str = f"{html.escape(str(icon))} " if icon else ""
     badge_html = ""
     if badge_text:
-        badge_html = f'<span class="bento-badge {badge_type}">{badge_text}</span>'
+        safe_badge_type = html.escape(str(badge_type))
+        safe_badge_text = html.escape(str(badge_text))
+        badge_html = f'<span class="bento-badge {safe_badge_type}">{safe_badge_text}</span>'
 
     progress_html = ""
     if score_pct is not None:
@@ -614,11 +621,11 @@ def render_bento_card(
     <div class="bento-card">
         <div>
             <div class="bento-card-top">
-                <span class="bento-title">{icon_str}{title}</span>
+                <span class="bento-title">{icon_str}{safe_title}</span>
                 {badge_html}
             </div>
-            <div class="bento-value">{value}</div>
-            <div class="bento-subtitle">{subtitle}</div>
+            <div class="bento-value">{safe_value}</div>
+            <div class="bento-subtitle">{safe_subtitle}</div>
         </div>
         {progress_html}
     </div>
@@ -659,7 +666,9 @@ def render_telemetry_widget(telemetry: Any) -> None:
     prompt_pct = (prompt_tokens / total_tokens * 100) if total_tokens else 50
     completion_pct = 100 - prompt_pct
 
-    html = f"""
+    safe_hash = html.escape(str(content_hash)[:16])
+
+    html_str = f"""
     <div class="telemetry-card">
         <div class="telemetry-status-badge {status_class}">
             {status_text}
@@ -684,11 +693,11 @@ def render_telemetry_widget(telemetry: Any) -> None:
         </div>
         <div style="margin-top: 8px;">
             <div class="telemetry-label">🔑 SHA-256 Hash Khóa đệm:</div>
-            <div class="telemetry-hash">{content_hash[:16]}...</div>
+            <div class="telemetry-hash">{safe_hash}...</div>
         </div>
     </div>
     """
-    st.markdown(html, unsafe_allow_html=True)
+    st.markdown(html_str, unsafe_allow_html=True)
 
 
 def render_user_story_card(
@@ -700,21 +709,26 @@ def render_user_story_card(
 ) -> None:
     """Hiển thị thẻ User Story chuẩn MoSCoW kèm kịch bản Gherkin BDD."""
     if hasattr(req_or_id, "req_id"):
-        req_id = req_or_id.req_id
-        title = title or getattr(req_or_id, "title", "")
-        user_story = user_story or getattr(req_or_id, "user_story", "")
-        priority = priority or getattr(req_or_id, "priority", "Medium")
-        acceptance_criteria = acceptance_criteria or getattr(req_or_id, "acceptance_criteria", [])
+        raw_req_id = req_or_id.req_id
+        raw_title = title or getattr(req_or_id, "title", "")
+        raw_user_story = user_story or getattr(req_or_id, "user_story", "")
+        raw_priority = priority or getattr(req_or_id, "priority", "Medium")
+        raw_ac = acceptance_criteria or getattr(req_or_id, "acceptance_criteria", [])
     else:
-        req_id = str(req_or_id)
-        title = title or ""
-        user_story = user_story or ""
-        priority = priority or "Medium"
-        acceptance_criteria = acceptance_criteria or []
+        raw_req_id = str(req_or_id)
+        raw_title = title or ""
+        raw_user_story = user_story or ""
+        raw_priority = priority or "Medium"
+        raw_ac = acceptance_criteria or []
+
+    req_id = html.escape(str(raw_req_id))
+    safe_title = html.escape(str(raw_title))
+    safe_user_story = html.escape(str(raw_user_story))
+    safe_priority = html.escape(str(raw_priority))
 
     prio_class = "must-have"
     prio_badge_type = "danger"
-    prio_lower = (priority or "medium").lower()
+    prio_lower = (raw_priority or "medium").lower()
     if "should" in prio_lower or "medium" in prio_lower:
         prio_class = "should-have"
         prio_badge_type = "warning"
@@ -723,10 +737,10 @@ def render_user_story_card(
         prio_badge_type = "info"
 
     ac_items_html = []
-    for idx, ac in enumerate(acceptance_criteria, start=1):
-        given_val = getattr(ac, "given", "")
-        when_val = getattr(ac, "when", "")
-        then_val = getattr(ac, "then", "")
+    for idx, ac in enumerate(raw_ac, start=1):
+        given_val = html.escape(str(getattr(ac, "given", "")))
+        when_val = html.escape(str(getattr(ac, "when", "")))
+        then_val = html.escape(str(getattr(ac, "then", "")))
         ac_items_html.append(f"""
         <div class="gherkin-box">
             <div style="font-weight: 600; margin-bottom: 6px; color: #475569;">Kịch bản #{idx}:</div>
@@ -751,11 +765,12 @@ def render_user_story_card(
     <div class="story-card {prio_class}">
         <div class="story-header">
             <span class="story-req-id">📌 {req_id}</span>
-            <span class="bento-badge {prio_badge_type}">⭐ {priority}</span>
+            <span class="bento-badge {prio_badge_type}">⭐ {safe_priority}</span>
         </div>
-        <h4 class="story-title">{title}</h4>
-        <div class="story-narrative">"{user_story}"</div>
+        <h4 class="story-title">{safe_title}</h4>
+        <div class="story-narrative">"{safe_user_story}"</div>
         {all_ac}
     </div>
     """
     st.markdown(card_html, unsafe_allow_html=True)
+

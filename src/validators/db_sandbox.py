@@ -6,6 +6,14 @@ from typing import Dict, Any, List, Optional
 import sqlglot
 from sqlglot import exp
 
+from src.utils.security import MAX_SQL_DDL_LENGTH, MAX_SQL_STATEMENTS
+
+# Regex phát hiện câu lệnh bị cấm có thể phá vỡ phạm vi SQLite sandbox
+_DANGEROUS_SQL_PATTERN = re.compile(
+    r"\b(ATTACH(?:\s+DATABASE)?|DETACH(?:\s+DATABASE)?|VACUUM\s+INTO|load_extension|PRAGMA\s+writable_schema)\b",
+    re.IGNORECASE,
+)
+
 
 def _sanitize_ddl_for_sqlite(sql_ddl: str) -> str:
     """Loại bỏ hoặc thay thế các hàm/cú pháp đặc thù của Postgres để chạy an toàn trên SQLite."""
@@ -96,6 +104,16 @@ def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
         res["error_message"] = "Đoạn mã SQL trống."
         return res
 
+    if len(sql_code) > MAX_SQL_DDL_LENGTH:
+        res = default_failure.copy()
+        res["error_message"] = f"Mã SQL DDL vượt quá giới hạn an toàn cho phép ({MAX_SQL_DDL_LENGTH:,} ký tự)."
+        return res
+
+    if _DANGEROUS_SQL_PATTERN.search(sql_code):
+        res = default_failure.copy()
+        res["error_message"] = "Phát hiện câu lệnh hoặc từ khóa nguy hiểm bị cấm trong SQLite Sandbox (ATTACH/DETACH/VACUUM INTO/load_extension)."
+        return res
+
     # Loại bỏ markdown fences
     cleaned_sql = sql_code.strip()
     cleaned_sql = re.sub(r"^```(?:sql)?\s*\n?", "", cleaned_sql, flags=re.IGNORECASE).strip()
@@ -160,10 +178,26 @@ def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
         res["error_message"] = "Không tìm thấy câu lệnh CREATE TABLE hợp lệ nào để thực thi."
         return res
 
+    if len(table_statements) + len(index_statements) > MAX_SQL_STATEMENTS:
+        res = default_failure.copy()
+        res["error_message"] = f"Số lượng câu lệnh SQL DDL vượt quá giới hạn an toàn (tối đa {MAX_SQL_STATEMENTS} câu lệnh)."
+        return res
+
     # 2. Thực thi trong SQLite in-memory sandbox
     conn = None
     try:
         conn = sqlite3.connect(":memory:")
+        step_counter = 0
+        MAX_PROGRESS_STEPS = 50_000
+
+        def _sandbox_progress_handler() -> int:
+            nonlocal step_counter
+            step_counter += 1
+            if step_counter > MAX_PROGRESS_STEPS:
+                return 1
+            return 0
+
+        conn.set_progress_handler(_sandbox_progress_handler, 100)
         cursor = conn.cursor()
 
         # BƯỚC A: Thực thi toàn bộ câu lệnh CREATE TABLE
@@ -196,8 +230,9 @@ def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
         seen_unindexed_keys = set()
 
         for tbl in tables:
+            safe_tbl = tbl.replace('"', '""')
             # Lấy thông tin cột: cid, name, type, notnull, dflt_value, pk
-            cursor.execute(f"PRAGMA table_info('{tbl}');")
+            cursor.execute(f'PRAGMA table_info("{safe_tbl}");')
             col_rows = cursor.fetchall()
             columns = [
                 {
@@ -222,11 +257,12 @@ def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
                     leftmost_indexed_cols.add(r[1])
 
             # 2. Cột đứng ở vị trí đầu tiên (seqno == 0) của mọi Index trên bảng (PRAGMA index_list & index_info)
-            cursor.execute(f"PRAGMA index_list('{tbl}');")
+            cursor.execute(f'PRAGMA index_list("{safe_tbl}");')
             idx_rows = cursor.fetchall()
             for idx_r in idx_rows:
                 idx_name = idx_r[1]
-                cursor.execute(f"PRAGMA index_info('{idx_name}');")
+                safe_idx = idx_name.replace('"', '""')
+                cursor.execute(f'PRAGMA index_info("{safe_idx}");')
                 info_rows = cursor.fetchall()
                 for info_r in info_rows:
                     seqno = info_r[0]
@@ -235,7 +271,7 @@ def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
                         leftmost_indexed_cols.add(col_name)
 
             # Lấy thông tin khóa ngoại: id, seq, table, from, to, on_update, on_delete, match
-            cursor.execute(f"PRAGMA foreign_key_list('{tbl}');")
+            cursor.execute(f'PRAGMA foreign_key_list("{safe_tbl}");')
             fk_rows = cursor.fetchall()
             foreign_keys = [
                 {

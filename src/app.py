@@ -37,6 +37,8 @@ from src.ui.theme import (
     render_telemetry_widget,
     render_user_story_card,
 )
+from src.utils.security import sanitize_error_message, MAX_MEETING_NOTES_LENGTH
+
 
 # Tương thích ngược với các module và test
 export_srs_markdown = generate_markdown_report
@@ -199,8 +201,9 @@ def render_mermaid(mermaid_code: str, height: int = 560, diagram_type: str = "")
             mermaid.initialize({{
                 startOnLoad: false,
                 theme: 'default',
-                securityLevel: 'loose'
+                securityLevel: 'strict'
             }});
+
 
             let scale = 1.0;
             let pointX = 0;
@@ -282,8 +285,14 @@ def render_mermaid(mermaid_code: str, height: int = 560, diagram_type: str = "")
                     setTimeout(resetView, 60);
                 }} catch (err) {{
                     console.error("Mermaid Render Error:", err);
-                    container.innerHTML = '<div class="mermaid-error"><strong>⚠️ Lỗi hiển thị Mermaid:</strong><br>' +
-                        (err.message || err) + '</div>';
+                    const safeErr = document.createElement('div');
+                    safeErr.className = 'mermaid-error';
+                    safeErr.innerHTML = '<strong>⚠️ Lỗi hiển thị Mermaid:</strong><br>';
+                    const msgSpan = document.createElement('span');
+                    msgSpan.textContent = (err && err.message) ? err.message : String(err);
+                    safeErr.appendChild(msgSpan);
+                    container.innerHTML = '';
+                    container.appendChild(safeErr);
                 }}
             }}
 
@@ -500,6 +509,7 @@ with st.expander("📝 Biên bản Ghi chú Họp Khách hàng (Raw Meeting Note
         "Nội dung Biên bản Ghi chú Họp Khách hàng (Raw Meeting Notes):",
         value=st.session_state["raw_notes_input"],
         height=220,
+        max_chars=MAX_MEETING_NOTES_LENGTH,
         placeholder="Dán nội dung thảo luận với khách hàng, yêu cầu nghiệp vụ, quy trình hoạt động...",
         label_visibility="collapsed",
     )
@@ -521,6 +531,8 @@ if generate_clicked:
         st.error("Lỗi: Bạn cần cung cấp Gemini API Key để thực hiện.")
     elif not meeting_notes_text.strip():
         st.error("Lỗi: Vui lòng nhập nội dung ghi chú họp trước khi phân tích.")
+    elif len(meeting_notes_text) > MAX_MEETING_NOTES_LENGTH:
+        st.error(f"Lỗi: Nội dung ghi chú họp vượt quá giới hạn an toàn ({MAX_MEETING_NOTES_LENGTH:,} ký tự). Vui lòng rút gọn.")
     else:
         with st.spinner("🤖 AI Principal BA & Enterprise Architect đang phân tích nghiệp vụ, chuẩn hóa 3NF và sinh sơ đồ..."):
             try:
@@ -552,7 +564,8 @@ if generate_clicked:
                     )
                 st.rerun()
             except Exception as e:
-                st.error(f"❌ Quá trình phân tích gặp sự cố: {str(e)}")
+                safe_err = sanitize_error_message(e, api_key)
+                st.error(f"❌ Quá trình phân tích gặp sự cố: {safe_err}")
 
 # -------------------------------------------------------------
 # HIỂN THỊ KẾT QUẢ TRÊN 4 TABS
