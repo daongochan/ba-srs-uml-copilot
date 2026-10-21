@@ -1,8 +1,10 @@
 """Telemetry, Content-Addressable Caching, and Exponential Backoff Retry for LLMOps."""
 
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime
 import hashlib
+import random
 import re
 import time
 from typing import Optional, Dict, Tuple, Any, Callable
@@ -24,14 +26,18 @@ class TelemetryMetrics:
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
+# Pre-compiled regex for content hashing
+_WHITESPACE_REGEX = re.compile(r"\s+")
+
+
 def compute_content_hash(raw_text: str, model_name: str = "gemini-3.8-flash") -> str:
     """Chuẩn hóa khoảng trắng và tính toán mã băm SHA-256 (64 ký tự hex) đại diện cho nội dung.
     
     Đảm bảo 2 văn bản có nội dung ngữ nghĩa giống nhau (chỉ khác khoảng trắng thừa, tab, xuống dòng)
     sẽ sinh ra cùng một mã băm duy nhất (Idempotent Content-Addressable Key).
     """
-    normalized_text = re.sub(r"\s+", " ", raw_text or "").strip()
-    normalized_model = re.sub(r"\s+", " ", model_name or "").strip().lower()
+    normalized_text = _WHITESPACE_REGEX.sub(" ", raw_text or "").strip()
+    normalized_model = _WHITESPACE_REGEX.sub(" ", model_name or "").strip().lower()
     payload = f"{normalized_text}::{normalized_model}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -39,28 +45,58 @@ def compute_content_hash(raw_text: str, model_name: str = "gemini-3.8-flash") ->
 class DeterministicSRSCache:
     """Bộ nhớ đệm trong RAM (In-Memory Cache) lưu trữ các tài liệu SRS dựa trên mã băm nội dung SHA-256.
     
-    Cung cấp thời gian truy xuất O(1), triệt tiêu độ trễ mạng và tiết kiệm 100% chi phí token
-    cho các yêu cầu phân tích có cùng nội dung đầu vào.
+    Tích hợp cơ chế giải phóng bộ nhớ LRU (Least Recently Used) và TTL (Time-To-Live)
+    để ngăn ngừa rò rỉ bộ nhớ (Memory Leak) và cung cấp thời gian truy xuất O(1).
     """
 
-    def __init__(self) -> None:
-        self._cache: Dict[str, Tuple[SRSDocument, TelemetryMetrics]] = {}
+    def __init__(self, max_size: int = 128, ttl_seconds: Optional[float] = 3600.0) -> None:
+        self.max_size = max(1, max_size)
+        self.ttl_seconds = ttl_seconds
+        self._cache: OrderedDict[str, Tuple[SRSDocument, TelemetryMetrics, float]] = OrderedDict()
 
     def get(self, content_hash: str) -> Optional[Tuple[SRSDocument, TelemetryMetrics]]:
-        """Truy xuất tài liệu SRS và telemetry từ bộ nhớ đệm."""
-        return self._cache.get(content_hash)
+        """Truy xuất tài liệu SRS và telemetry từ bộ nhớ đệm kèm kiểm tra TTL và cập nhật vị trí LRU."""
+        if content_hash not in self._cache:
+            return None
+
+        doc, metrics, created_at = self._cache[content_hash]
+        if self.ttl_seconds is not None and (time.time() - created_at) > self.ttl_seconds:
+            del self._cache[content_hash]
+            return None
+
+        # Cập nhật vị trí LRU (đưa về cuối là mục dùng gần đây nhất)
+        self._cache.move_to_end(content_hash)
+        return doc.model_copy(deep=True), metrics
 
     def set(self, content_hash: str, doc: SRSDocument, metrics: TelemetryMetrics) -> None:
-        """Lưu trữ tài liệu SRS và telemetry vào bộ nhớ đệm."""
-        self._cache[content_hash] = (doc, metrics)
+        """Lưu trữ tài liệu SRS vào cache, kích hoạt thu hồi LRU nếu vượt ngưỡng max_size."""
+        if content_hash in self._cache:
+            self._cache.move_to_end(content_hash)
+        elif len(self._cache) >= self.max_size:
+            # Thu hồi phần tử cũ nhất (đầu danh sách OrderedDict)
+            self._cache.popitem(last=False)
+
+        # Lưu bản sao độc lập trong cache để tránh ô nhiễm trạng thái
+        self._cache[content_hash] = (doc.model_copy(deep=True), metrics, time.time())
 
     def clear(self) -> None:
         """Xóa toàn bộ dữ liệu trong bộ nhớ đệm."""
         self._cache.clear()
 
     def size(self) -> int:
-        """Số lượng bản ghi hiện có trong bộ nhớ đệm."""
+        """Số lượng bản ghi hợp lệ (chưa hết hạn) hiện có trong bộ nhớ đệm."""
+        self.prune_expired()
         return len(self._cache)
+
+    def prune_expired(self) -> int:
+        """Loại bỏ các bản ghi đã quá thời hạn TTL khỏi bộ nhớ đệm."""
+        if self.ttl_seconds is None:
+            return 0
+        now = time.time()
+        expired_keys = [k for k, (_, _, t) in self._cache.items() if (now - t) > self.ttl_seconds]
+        for k in expired_keys:
+            del self._cache[k]
+        return len(expired_keys)
 
 
 # Global Singleton Cache Instance
@@ -72,7 +108,7 @@ def execute_with_exponential_backoff(
     max_retries: int = 3,
     base_delay: float = 1.0,
 ) -> Tuple[Any, int]:
-    """Thực thi hàm với cơ chế tự phục hồi Exponential Backoff Retry khi gặp lỗi mạng/rate-limit.
+    """Thực thi hàm với cơ chế tự phục hồi Exponential Backoff Retry kèm Jitter khi gặp lỗi mạng/rate-limit.
     
     Quy tắc xử lý lỗi:
     - Thử lại khi gặp các lỗi tạm thời: HTTP 429 (Rate Limit), 500 (Internal Server Error),
@@ -114,6 +150,8 @@ def execute_with_exponential_backoff(
             if attempts > max_retries:
                 raise e
 
-            # Tính toán thời gian chờ theo hàm mũ: base_delay * 2^(attempts - 1)
-            delay = base_delay * (2 ** (attempts - 1))
+            # Tính toán thời gian chờ theo hàm mũ kèm Jitter ngẫu nhiên để tránh thundering herd
+            jitter = random.uniform(0.05, 0.25)
+            delay = (base_delay * (2 ** (attempts - 1))) + jitter
             time.sleep(delay)
+

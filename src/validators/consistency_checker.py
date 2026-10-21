@@ -7,6 +7,24 @@ from sqlglot import exp
 
 from src.models.srs_schema import SRSDocument, TraceabilityItem
 
+# Pre-compiled regex patterns cho kiểm toán tính nhất quán mô hình
+_SQL_FENCE_START = re.compile(r"^```(?:sql)?\s*\n?", re.IGNORECASE)
+_SQL_FENCE_END = re.compile(r"\n?```\s*$")
+_QUOTE_STRIP_REGEX = re.compile(r"[\"\'`\[\]]")
+_FALLBACK_TABLE_REGEX = re.compile(
+    r"\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\"\'`]?\w+[\"\'`]?\.)?[\"\'`]?([A-Za-z0-9_]+)[\"\'`]?",
+    re.IGNORECASE,
+)
+
+_ERD_FENCE_START = re.compile(r"^```(?:mermaid)?\s*\n?", re.IGNORECASE)
+_ERD_FENCE_END = re.compile(r"\n?```\s*$")
+_ERD_BLOCKS_REGEX = re.compile(r"^\s*([A-Za-z0-9_]+)\s*\{", re.MULTILINE)
+_ERD_STRIP_BODY_REGEX = re.compile(r"\{[^}]*\}")
+_ERD_REL_REGEX = re.compile(
+    r"^\s*([A-Za-z0-9_]+)\s+([\|\{\}o\.\-\<\>]+)\s+([A-Za-z0-9_]+)(?:\s*:\s*.*)?$"
+)
+_ERD_SINGLE_IDENTIFIER = re.compile(r"^[A-Za-z0-9_]+$")
+
 
 def extract_ddl_tables(sql_code: str) -> Set[str]:
     """Trích xuất tập hợp tên các bảng vật lý được định nghĩa trong câu lệnh SQL DDL.
@@ -17,8 +35,8 @@ def extract_ddl_tables(sql_code: str) -> Set[str]:
         return set()
 
     cleaned_sql = sql_code.strip()
-    cleaned_sql = re.sub(r"^```(?:sql)?\s*\n?", "", cleaned_sql, flags=re.IGNORECASE).strip()
-    cleaned_sql = re.sub(r"\n?```\s*$", "", cleaned_sql).strip()
+    cleaned_sql = _SQL_FENCE_START.sub("", cleaned_sql).strip()
+    cleaned_sql = _SQL_FENCE_END.sub("", cleaned_sql).strip()
 
     tables: Set[str] = set()
 
@@ -43,15 +61,14 @@ def extract_ddl_tables(sql_code: str) -> Set[str]:
                             tbl_name = table_expr.name
                         else:
                             tbl_name = str(table_expr)
-                        clean_name = re.sub(r"[\"\'`\[\]]", "", tbl_name).strip().lower()
+                        clean_name = _QUOTE_STRIP_REGEX.sub("", tbl_name).strip().lower()
                         if clean_name and not clean_name.startswith("sqlite_"):
                             tables.add(clean_name)
     except Exception:
         pass
 
     # 2. Sử dụng Regex làm lớp bảo vệ dự phòng (Fallback Regex)
-    regex_pattern = r"(?i)\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\"\'`]?\w+[\"\'`]?\.)?[\"\'`]?([A-Za-z0-9_]+)[\"\'`]?"
-    matches = re.findall(regex_pattern, cleaned_sql)
+    matches = _FALLBACK_TABLE_REGEX.findall(cleaned_sql)
     for m in matches:
         clean_m = m.strip().lower()
         if clean_m and not clean_m.startswith("sqlite_"):
@@ -69,30 +86,28 @@ def extract_erd_entities(erd_mermaid: str) -> Set[str]:
         return set()
 
     cleaned_erd = erd_mermaid.strip()
-    cleaned_erd = re.sub(r"^```(?:mermaid)?\s*\n?", "", cleaned_erd, flags=re.IGNORECASE).strip()
-    cleaned_erd = re.sub(r"\n?```\s*$", "", cleaned_erd).strip()
+    cleaned_erd = _ERD_FENCE_START.sub("", cleaned_erd).strip()
+    cleaned_erd = _ERD_FENCE_END.sub("", cleaned_erd).strip()
 
     entities: Set[str] = set()
 
     # 1. Trích xuất từ các khối thực thể có ngoặc nhọn: ENTITY_NAME { ... }
-    block_matches = re.findall(r"^\s*([A-Za-z0-9_]+)\s*\{", cleaned_erd, flags=re.MULTILINE)
+    block_matches = _ERD_BLOCKS_REGEX.findall(cleaned_erd)
     for ent in block_matches:
         clean_ent = ent.strip().lower()
         if clean_ent not in {"erdiagram", "direction"}:
             entities.add(clean_ent)
 
     # 2. Loại bỏ toàn bộ phần thân thuộc tính { ... } để tránh nhận diện nhầm trường thành tên thực thể
-    erd_without_blocks = re.sub(r"\{[^}]*\}", "", cleaned_erd)
+    erd_without_blocks = _ERD_STRIP_BODY_REGEX.sub("", cleaned_erd)
 
     # 3. Trích xuất từ các dòng quan hệ: ENTITY_A ||--o{ ENTITY_B : label
-    # Ký hiệu quan hệ trong Mermaid ERD có thể chứa: |, {, }, o, ., -, <, >
-    rel_regex = r"^\s*([A-Za-z0-9_]+)\s+([\|\{\}o\.\-\<\>]+)\s+([A-Za-z0-9_]+)(?:\s*:\s*.*)?$"
     for line in erd_without_blocks.splitlines():
         line = line.strip()
         if not line or line.startswith("%%") or line.lower().startswith("erdiagram") or line.lower().startswith("direction"):
             continue
 
-        match = re.match(rel_regex, line)
+        match = _ERD_REL_REGEX.match(line)
         if match:
             left_ent = match.group(1).strip().lower()
             rel_symbols = match.group(2).strip()
@@ -103,7 +118,7 @@ def extract_erd_entities(erd_mermaid: str) -> Set[str]:
                     entities.add(left_ent)
                 if right_ent not in {"erdiagram", "direction"}:
                     entities.add(right_ent)
-        elif re.match(r"^[A-Za-z0-9_]+$", line):
+        elif _ERD_SINGLE_IDENTIFIER.match(line):
             clean_line = line.strip().lower()
             if clean_line not in {"erdiagram", "direction"}:
                 entities.add(clean_line)

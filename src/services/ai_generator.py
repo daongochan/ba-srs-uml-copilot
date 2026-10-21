@@ -123,7 +123,7 @@ def generate_srs_with_telemetry(
         if cached_entry:
             cached_doc, original_metrics = cached_entry
             t_start = time.perf_counter()
-            doc_copy = cached_doc.model_copy(deep=True)
+            doc_copy = cached_doc
             lookup_latency_ms = (time.perf_counter() - t_start) * 1000.0
             telemetry = TelemetryMetrics(
                 latency_ms=round(lookup_latency_ms, 2),
@@ -166,6 +166,9 @@ Hãy phân tích nghiệp vụ, chuẩn hóa theo IEEE 29148 & BABOK, thiết k�
         )
     except Exception as e:
         safe_msg = sanitize_error_message(e, api_key=api_key)
+        err_upper = str(e).upper()
+        if any(term in err_upper for term in ("429", "RESOURCE_EXHAUSTED", "QUOTA")):
+            safe_msg += " (Gợi ý: Dịch vụ Gemini API đang quá tải hoặc đạt giới hạn hạn ngạch. Vui lòng chờ vài giây rồi thử lại hoặc kiểm tra quota tại Google AI Studio)."
         raise RuntimeError(f"Lỗi khi gọi mô hình Gemini AI: {safe_msg}") from None
 
     latency_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
@@ -223,8 +226,8 @@ Hãy phân tích nghiệp vụ, chuẩn hóa theo IEEE 29148 & BABOK, thiết k�
         content_hash=content_hash,
     )
 
-    # Lưu vào bộ nhớ đệm
-    default_srs_cache.set(content_hash, doc.model_copy(deep=True), telemetry)
+    # Lưu vào bộ nhớ đệm (DeterministicSRSCache sẽ tự động sao chép bảo vệ)
+    default_srs_cache.set(content_hash, doc, telemetry)
 
     return doc, telemetry
 
