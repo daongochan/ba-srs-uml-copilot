@@ -28,7 +28,6 @@ from src.models.srs_schema import (
 )
 
 
-
 class TestMermaidValidator:
     """Test suite for clean_and_validate_mermaid function."""
 
@@ -100,7 +99,12 @@ erDiagram
         # Đảm bảo không còn dấu phẩy ở cuối dòng thuộc tính
         for line in cleaned.splitlines():
             stripped = line.strip()
-            if stripped and not stripped.startswith("erDiagram") and not stripped.endswith("{") and not stripped.endswith("}"):
+            if (
+                stripped
+                and not stripped.startswith("erDiagram")
+                and not stripped.endswith("{")
+                and not stripped.endswith("}")
+            ):
                 if "PK" in stripped or "FK" in stripped or "varchar" in stripped:
                     assert not stripped.endswith(","), f"Dòng vẫn còn dấu phẩy: {stripped}"
 
@@ -404,7 +408,9 @@ CREATE TABLE child (
         assert result["unindexed_foreign_keys"][0]["table"] == "child"
         assert result["unindexed_foreign_keys"][0]["fk_column"] == "parent_id"
         assert result["unindexed_foreign_keys"][0]["referenced_table"] == "parent"
-        assert "CREATE INDEX IF NOT EXISTS idx_child_parent_id ON child (parent_id);" in result["recommended_index_script"]
+        assert (
+            "CREATE INDEX IF NOT EXISTS idx_child_parent_id ON child (parent_id);" in result["recommended_index_script"]
+        )
         assert result["performance_health_score"] == 90
         assert result["total_indexes_created"] == 0
 
@@ -432,7 +438,6 @@ CREATE INDEX idx_child_parent_id ON child (parent_id);
         assert result["recommended_index_script"] == ""
         assert result["performance_health_score"] == 100
         assert result["total_indexes_created"] == 1
-
 
 
 class TestRequirementsLinter:
@@ -617,7 +622,7 @@ class TestRequirementsLinter:
                     metric="100% mật khẩu được băm an toàn.",
                 )
             ],
-            sequence_diagram_mermaid="sequenceDiagram\n    actor U as \"U\"\n    U->>S: req",
+            sequence_diagram_mermaid='sequenceDiagram\n    actor U as "U"\n    U->>S: req',
             er_diagram_mermaid="erDiagram\n    T { int id PK }",
             sql_ddl_script="CREATE TABLE t (id INT PRIMARY KEY);",
             traceability_matrix=[
@@ -678,7 +683,7 @@ class TestRequirementsLinter:
                     metric="Uptime đạt 99.9% hàng tháng.",
                 )
             ],
-            sequence_diagram_mermaid="sequenceDiagram\n    actor U as \"U\"\n    U->>S: req",
+            sequence_diagram_mermaid='sequenceDiagram\n    actor U as "U"\n    U->>S: req',
             er_diagram_mermaid="erDiagram\n    T { int id PK }",
             sql_ddl_script="CREATE TABLE t (id INT PRIMARY KEY);",
             traceability_matrix=[
@@ -752,7 +757,7 @@ class TestCrossModelConsistency:
                     metric="Response time < 500ms cho 99% request.",
                 )
             ],
-            sequence_diagram_mermaid="sequenceDiagram\n    participant U as \"User\"\n    U->>S: req",
+            sequence_diagram_mermaid='sequenceDiagram\n    participant U as "User"\n    U->>S: req',
             er_diagram_mermaid="""erDiagram
     USERS ||--o{ ORDERS : places
     USERS {
@@ -828,7 +833,7 @@ CREATE TABLE orders (
                 )
             ],
             non_functional_requirements=[],
-            sequence_diagram_mermaid="sequenceDiagram\n    actor U as \"U\"\n    U->>S: req",
+            sequence_diagram_mermaid='sequenceDiagram\n    actor U as "U"\n    U->>S: req',
             er_diagram_mermaid="""erDiagram
     AUDITORIUMS {
         int id PK
@@ -867,7 +872,9 @@ CREATE TABLE cinema_halls (
         assert synced_audit["phantom_tables_in_rtm"] == []
         assert synced_audit["orphan_tables_in_ddl"] == []
         assert "cinema_halls" in synced_doc.traceability_matrix[0].related_tables
-        assert "CINEMA_HALLS" in synced_doc.er_diagram_mermaid or "cinema_halls" in synced_doc.er_diagram_mermaid.lower()
+        assert (
+            "CINEMA_HALLS" in synced_doc.er_diagram_mermaid or "cinema_halls" in synced_doc.er_diagram_mermaid.lower()
+        )
 
 
 class TestTelemetryAndCache:
@@ -941,9 +948,7 @@ class TestTelemetryAndCache:
                 raise ConnectionError("503 Service Unavailable: Transient network spike")
             return "SUCCESS_DATA"
 
-        result, retries = execute_with_exponential_backoff(
-            mock_transient_failure, max_retries=3, base_delay=0.01
-        )
+        result, retries = execute_with_exponential_backoff(mock_transient_failure, max_retries=3, base_delay=0.01)
 
         assert result == "SUCCESS_DATA"
         assert retries == 1
@@ -962,5 +967,3 @@ class TestTelemetryAndCache:
             execute_with_exponential_backoff(mock_auth_error, max_retries=3, base_delay=0.01)
 
         assert call_count == 1  # Không retry
-
-

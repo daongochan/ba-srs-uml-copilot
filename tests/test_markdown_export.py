@@ -61,6 +61,7 @@ def test_export_srs_markdown_contains_all_sections():
 
 def test_export_srs_markdown_backward_compatible_without_state_machine():
     """Verify export_srs_markdown gracefully handles legacy documents missing new fields."""
+
     class LegacySRSDocument:
         project_title = "Legacy System"
         business_objective = "Legacy Objective"
@@ -77,4 +78,3 @@ def test_export_srs_markdown_backward_compatible_without_state_machine():
     md = export_srs_markdown(legacy_doc)  # type: ignore[arg-type]
     assert "# Legacy System" in md
     assert "5.1. Sơ đồ Máy Trạng thái" not in md
-

@@ -7,14 +7,27 @@ import sqlglot
 from sqlglot import exp
 from sqlglot.errors import ParseError, SqlglotError
 
+# Pre-compiled regexes cho chuẩn hóa ID và thuộc tính sơ đồ
+_CLEAN_ID_NON_ALPHANUM = re.compile(r"[^a-zA-Z0-9_]")
+_CLEAN_ID_UNDERSCORES = re.compile(r"_+")
+_ERD_COMMENT_MATCH = re.compile(r'([\'"])(.*?)\1\s*,?\s*$')
+_ERD_DATATYPE_SIZE = re.compile(r"([a-zA-Z0-9_]+)\s*\([^)]*\)")
+_ERD_TRAILING_COMMA = re.compile(r",\s*$")
+_SEQ_PARTICIPANT_MATCH = re.compile(r"^(actor|participant)\s+(.*)$", re.IGNORECASE)
+_SEQ_AS_MATCH = re.compile(r"^(.*?)\s+as\s+(.*)$", re.IGNORECASE)
+_SEQ_ARROW_PATTERN = re.compile(r"(->>|-->>|->|-->|-x|--x|-\)|--\))")
+_STATE_TRAILING_SEMICOLON = re.compile(r";\s*$")
+_SCRIPT_TAG_CLEAN = re.compile(r"<\s*script[^>]*>.*?<\s*/\s*script\s*>", re.IGNORECASE | re.DOTALL)
+_JAVASCRIPT_URL_CLEAN = re.compile(r"javascript\s*:", re.IGNORECASE)
+
 
 def _slugify_to_id(text: str) -> str:
     """Chuyển đổi văn bản tiếng Việt hoặc có khoảng trắng thành ID tiếng Anh hợp lệ."""
     nfkd = unicodedata.normalize("NFKD", text)
     ascii_text = "".join(c for c in nfkd if not unicodedata.combining(c))
     ascii_text = ascii_text.replace("đ", "d").replace("Đ", "D")
-    clean_id = re.sub(r"[^a-zA-Z0-9_]", "_", ascii_text)
-    clean_id = re.sub(r"_+", "_", clean_id).strip("_")
+    clean_id = _CLEAN_ID_NON_ALPHANUM.sub("_", ascii_text)
+    clean_id = _CLEAN_ID_UNDERSCORES.sub("_", clean_id).strip("_")
     if not clean_id or clean_id[0].isdigit():
         clean_id = f"P_{clean_id}" if clean_id else "Participant"
     return clean_id
@@ -30,33 +43,33 @@ def _clean_erd_attribute_line(line: str) -> str:
     indent = line[:leading_spaces]
 
     # Kiểm tra chú thích ở cuối dòng: "comment" hoặc 'comment' (có thể có dấu phẩy sau)
-    comment_match = re.search(r'([\'"])(.*?)\1\s*,?\s*$', stripped)
+    comment_match = _ERD_COMMENT_MATCH.search(stripped)
     if comment_match:
         comment_text = comment_match.group(2)
-        before_comment = stripped[:comment_match.start(0)].rstrip()
+        before_comment = stripped[: comment_match.start(0)].rstrip()
         # Xóa kích thước kiểu dữ liệu trong ngoặc: varchar(150) -> varchar, decimal(10, 2) -> decimal
-        before_comment = re.sub(r'([a-zA-Z0-9_]+)\s*\([^)]*\)', r'\1', before_comment)
+        before_comment = _ERD_DATATYPE_SIZE.sub(r"\1", before_comment)
         # Xóa dấu phẩy phân tách giữa các trường
-        before_comment = before_comment.replace(',', ' ')
+        before_comment = before_comment.replace(",", " ")
         tokens = before_comment.split()
         cleaned_before = " ".join(tokens)
         return f'{indent}{cleaned_before} "{comment_text}"'
     else:
         # Không có chú thích
         # Xóa dấu phẩy ở cuối dòng
-        cleaned = re.sub(r',\s*$', '', stripped)
+        cleaned = _ERD_TRAILING_COMMA.sub("", stripped)
         # Xóa kích thước kiểu dữ liệu trong ngoặc: varchar(150) -> varchar, decimal(10, 2) -> decimal
-        cleaned = re.sub(r'([a-zA-Z0-9_]+)\s*\([^)]*\)', r'\1', cleaned)
-        cleaned = cleaned.replace(',', ' ')
+        cleaned = _ERD_DATATYPE_SIZE.sub(r"\1", cleaned)
+        cleaned = cleaned.replace(",", " ")
         tokens = cleaned.split()
         cleaned_attr = " ".join(tokens)
-        return f'{indent}{cleaned_attr}'
+        return f"{indent}{cleaned_attr}"
 
 
 def _clean_seq_participant_line(line: str) -> str:
     """Chuẩn hóa dòng khai báo actor/participant trong Sequence Diagram: ID as "Tên Hiển Thị"."""
     stripped = line.strip()
-    match = re.match(r"^(actor|participant)\s+(.*)$", stripped, flags=re.IGNORECASE)
+    match = _SEQ_PARTICIPANT_MATCH.match(stripped)
     if not match:
         return line
 
@@ -66,7 +79,7 @@ def _clean_seq_participant_line(line: str) -> str:
     rest = match.group(2).strip()
 
     # Trường hợp 1: Có từ khóa " as "
-    m_as = re.match(r"^(.*?)\s+as\s+(.*)$", rest, flags=re.IGNORECASE)
+    m_as = _SEQ_AS_MATCH.match(rest)
     if m_as:
         id_part = m_as.group(1).strip()
         alias_part = m_as.group(2).strip()
@@ -74,7 +87,7 @@ def _clean_seq_participant_line(line: str) -> str:
         if " " in id_part or any(ord(c) > 127 for c in id_part):
             id_part = _slugify_to_id(id_part)
         else:
-            id_part = id_part.strip('\'"')
+            id_part = id_part.strip("'\"")
 
         # Đảm bảo tên hiển thị được bọc trong dấu ngoặc kép ""
         if (alias_part.startswith('"') and alias_part.endswith('"')) or (
@@ -91,15 +104,14 @@ def _clean_seq_participant_line(line: str) -> str:
         return line
 
     # Có khoảng trắng, tiếng Việt hoặc bọc ngoặc kép -> tạo ID và bọc tên hiển thị trong ngoặc kép
-    clean_display = rest.strip('\'"')
+    clean_display = rest.strip("'\"")
     clean_id = _slugify_to_id(clean_display)
     return f'{indent}{role} {clean_id} as "{clean_display}"'
 
 
 def _clean_seq_message_line(line: str) -> str:
     """Loại bỏ dấu chấm phẩy ';' và ngoặc nhọn '{}' trong thông điệp Sequence Diagram."""
-    arrow_pattern = r"(->>|-->>|->|-->|-x|--x|-\)|--\))"
-    if re.search(arrow_pattern, line) and ":" in line:
+    if _SEQ_ARROW_PATTERN.search(line) and ":" in line:
         prefix, msg = line.split(":", 1)
         cleaned_msg = msg.replace(";", "").replace("{", "(").replace("}", ")")
         return f"{prefix}:{cleaned_msg}"
@@ -109,7 +121,7 @@ def _clean_seq_message_line(line: str) -> str:
 def _clean_state_line(line: str) -> str:
     """Làm sạch nhãn sự kiện và loại bỏ dấu chấm phẩy ';' trong State Machine Diagram."""
     # Xóa dấu chấm phẩy thừa ở cuối dòng
-    cleaned = re.sub(r";\s*$", "", line)
+    cleaned = _STATE_TRAILING_SEMICOLON.sub("", line)
     if "-->" in cleaned and ":" in cleaned:
         prefix, label = cleaned.split(":", 1)
         cleaned_label = label.replace(";", "").replace("{", "(").replace("}", ")")
@@ -143,7 +155,11 @@ def clean_and_validate_mermaid(code: str, diagram_type: str = "") -> str:
     lines = [line for line in raw_lines if "```" not in line]
     cleaned = "\n".join(lines).strip()
 
-    if not cleaned:
+    # 2b. Loại bỏ các thẻ script hoặc javascript: URL độc hại để tăng cường bảo mật
+    cleaned = _SCRIPT_TAG_CLEAN.sub("", cleaned)
+    cleaned = _JAVASCRIPT_URL_CLEAN.sub("", cleaned)
+
+    if not cleaned.strip():
         raise ValueError("Mã Mermaid không chứa cú pháp hợp lệ.")
 
     # 3. Tìm dòng lệnh đầu tiên không phải comment (%%) và không rỗng để xác định từ khóa
@@ -192,8 +208,8 @@ def clean_and_validate_mermaid(code: str, diagram_type: str = "") -> str:
                 # Khối thực thể trên cùng 1 dòng
                 prefix, rest = line.split("{", 1)
                 body, suffix = rest.rsplit("}", 1)
-                cleaned_body = re.sub(r'([a-zA-Z0-9_]+)\s*\([^)]*\)', r'\1', body)
-                cleaned_body = re.sub(r',\s*$', '', cleaned_body.strip()).replace(',', ' ')
+                cleaned_body = re.sub(r"([a-zA-Z0-9_]+)\s*\([^)]*\)", r"\1", body)
+                cleaned_body = re.sub(r",\s*$", "", cleaned_body.strip()).replace(",", " ")
                 tokens = cleaned_body.split()
                 processed_lines.append(f"{prefix}{{ {' '.join(tokens)} }}{suffix}")
             elif "{" in stripped:

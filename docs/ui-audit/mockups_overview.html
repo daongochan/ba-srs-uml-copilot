@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BA Copilot — 3 Phương Án Thiết Kế Giao Diện</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            padding: 40px 24px;
+        }
+        .header {
+            max-width: 1360px;
+            margin: 0 auto 36px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 800;
+            color: #ffffff;
+            margin-bottom: 10px;
+            letter-spacing: -0.02em;
+        }
+        .header p {
+            color: #94a3b8;
+            font-size: 15px;
+        }
+        .grid {
+            max-width: 1360px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 28px;
+        }
+        .option-card {
+            background: #ffffff;
+            border-radius: 16px;
+            color: #1e293b;
+            overflow: hidden;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+        }
+        .option-banner {
+            padding: 20px;
+            color: #ffffff;
+        }
+        .badge {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 4px 8px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .option-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .option-desc {
+            font-size: 13px;
+            opacity: 0.9;
+            line-height: 1.4;
+        }
+        .mockup-body {
+            padding: 20px;
+            background: #f8fafc;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .palette-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .swatch {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        .ui-preview {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 14px;
+            font-size: 12px;
+        }
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #f1f5f9;
+            margin-bottom: 12px;
+        }
+        .scenario-chips {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .chip {
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 8px 6px;
+            text-align: center;
+            font-size: 10.5px;
+            font-weight: 600;
+            background: #f8fafc;
+            cursor: pointer;
+        }
+        .chip.active {
+            border-color: #6366f1;
+            background: #eef2ff;
+            color: #4338ca;
+        }
+        .fake-input {
+            width: 100%;
+            height: 54px;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 8px;
+            font-size: 11px;
+            color: #64748b;
+            margin-bottom: 10px;
+        }
+        .btn-cta {
+            width: 100%;
+            padding: 9px;
+            border-radius: 6px;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+            border: none;
+            cursor: pointer;
+        }
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .kpi-mini {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 8px;
+        }
+        .kpi-mini-val {
+            font-size: 16px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        /* Phương án 1: Enterprise Tối Giản */
+        .opt-1 .option-banner { background: linear-gradient(135deg, #312e81, #4f46e5); }
+        .opt-1 .badge { background: #e0e7ff; color: #3730a3; }
+        .opt-1 .btn-cta { background: #4f46e5; }
+        .opt-1 .btn-cta:hover { background: #4338ca; }
+
+        /* Phương án 2: Dashboard Hiện Đại */
+        .opt-2 { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .opt-2 .option-banner { background: linear-gradient(135deg, #1e3a8a, #2563eb); }
+        .opt-2 .badge { background: #dbeafe; color: #1e40af; }
+        .opt-2 .btn-cta { background: #2563eb; border-radius: 8px; }
+        .opt-2 .chip { border-radius: 8px; }
+        .opt-2 .ui-preview { border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+
+        /* Phương án 3: Tài Liệu Biên Tập */
+        .opt-3 { font-family: 'Be Vietnam Pro', serif; }
+        .opt-3 .option-banner { background: linear-gradient(135deg, #134e4a, #0d9488); }
+        .opt-3 .badge { background: #ccfbf1; color: #115e59; }
+        .opt-3 .mockup-body { background: #fafaf9; }
+        .opt-3 .ui-preview { background: #ffffff; border-color: #e7e5e4; }
+        .opt-3 .btn-cta { background: #0d9488; }
+        .opt-3 .chip.active { border-color: #0d9488; background: #f0fdfa; color: #0f766e; }
+
+        .specs-list {
+            list-style: none;
+            font-size: 12px;
+            color: #475569;
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .specs-list li::before {
+            content: "✓ ";
+            color: #059669;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Khảo Sát Thiết Kế — 3 Phương Án Giao Diện</h1>
+        <p>Lựa chọn phong cách thị giác và ngôn ngữ trải nghiệm cho BA & System Architect Copilot</p>
+    </div>
+
+    <div class="grid">
+        <!-- PHƯƠNG ÁN 1 -->
+        <div class="option-card opt-1">
+            <div class="option-banner">
+                <span class="badge">Được đề xuất ⭐</span>
+                <h2 class="option-title">1. Enterprise Tối Giản</h2>
+                <p class="option-desc">Phong cách Linear/Stripe. Rõ ràng, độ tương phản tuyệt đối, tập trung 100% vào tài liệu và năng suất của BA.</p>
+            </div>
+            <div class="mockup-body">
+                <div class="palette-row">
+                    <span style="font-size: 11px; font-weight: 600; color: #64748b;">Màu:</span>
+                    <div class="swatch" style="background: #4f46e5;" title="Primary Indigo"></div>
+                    <div class="swatch" style="background: #0f172a;" title="Slate 900"></div>
+                    <div class="swatch" style="background: #f8fafc;" title="Surface Light"></div>
+                    <div class="swatch" style="background: #059669;" title="Success Green"></div>
+                    <div class="swatch" style="background: #d97706;" title="Warning Amber"></div>
+                </div>
+
+                <div class="ui-preview">
+                    <div class="preview-header">
+                        <span style="font-weight: 700; color: #1e1b4b;">📐 BA Copilot</span>
+                        <span style="font-size: 10px; background: #ecfdf5; color: #059669; padding: 2px 6px; border-radius: 4px; font-weight: 600;">Sẵn sàng</span>
+                    </div>
+
+                    <div style="font-size: 11px; font-weight: 600; color: #475569; margin-bottom: 6px;">Kịch bản khảo sát mẫu:</div>
+                    <div class="scenario-chips">
+                        <div class="chip active">🎬 Rạp Phim</div>
+                        <div class="chip">🚌 Xe Khách</div>
+                        <div class="chip">📦 Kho WMS</div>
+                    </div>
+
+                    <div class="fake-input">
+                        **Dự án:** Hệ thống Quản trị Suất chiếu & Đặt vé Rạp chiếu phim (CineMax System)...
+                    </div>
+
+                    <button class="btn-cta">🚀 Phân tích Yêu cầu & Tạo Đặc tả</button>
+
+                    <div class="kpi-row">
+                        <div class="kpi-mini">
+                            <div style="font-size: 10px; color: #64748b;">IEEE 29148</div>
+                            <div class="kpi-mini-val" style="color: #4f46e5;">95/100</div>
+                        </div>
+                        <div class="kpi-mini">
+                            <div style="font-size: 10px; color: #64748b;">Độ phủ RTM</div>
+                            <div class="kpi-mini-val" style="color: #059669;">100%</div>
+                        </div>
+                    </div>
+                </div>
+
+                <ul class="specs-list">
+                    <li>Font: <b>Inter</b> (chữ sắc nét) + <b>JetBrains Mono</b></li>
+                    <li>Nút CTA Indigo chuẩn SaaS, không dùng đỏ báo động</li>
+                    <li>Thẻ kịch bản 1-click ngay trên form nhập liệu</li>
+                    <li>Độ tương phản WCAG AAA (> 7:1)</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- PHƯƠNG ÁN 2 -->
+        <div class="option-card opt-2">
+            <div class="option-banner">
+                <span class="badge">Năng động</span>
+                <h2 class="option-title">2. Dashboard Hiện Đại</h2>
+                <p class="option-desc">Phong cách Vercel/Supabase. Bo góc mềm mại, đổ bóng đa tầng, dải thẻ Bento nổi bật, phong cách Fintech trẻ trung.</p>
+            </div>
+            <div class="mockup-body">
+                <div class="palette-row">
+                    <span style="font-size: 11px; font-weight: 600; color: #64748b;">Màu:</span>
+                    <div class="swatch" style="background: #2563eb;" title="Cobalt Blue"></div>
+                    <div class="swatch" style="background: #111827;" title="Gray 900"></div>
+                    <div class="swatch" style="background: #eff6ff;" title="Soft Blue Tint"></div>
+                    <div class="swatch" style="background: #10b981;" title="Emerald"></div>
+                    <div class="swatch" style="background: #f59e0b;" title="Amber"></div>
+                </div>
+
+                <div class="ui-preview">
+                    <div class="preview-header">
+                        <span style="font-weight: 800; color: #1e3a8a;">⚡ BA & SA Copilot</span>
+                        <span style="font-size: 10px; background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 12px; font-weight: 700;">PRO</span>
+                    </div>
+
+                    <div style="font-size: 11px; font-weight: 600; color: #475569; margin-bottom: 6px;">Chọn nghiệp vụ mẫu nhanh:</div>
+                    <div class="scenario-chips">
+                        <div class="chip active" style="border-color: #2563eb; background: #eff6ff; color: #1d4ed8;">🎟️ Vé Phim</div>
+                        <div class="chip">🚍 Vé Xe</div>
+                        <div class="chip">🏭 Kho Vận</div>
+                    </div>
+
+                    <div class="fake-input" style="border-radius: 8px;">
+                        Ghi chú cuộc họp thảo luận quy trình giữ chỗ 10 phút, tích hợp cổng thanh toán...
+                    </div>
+
+                    <button class="btn-cta">✨ Bắt đầu Phân tích Thông minh</button>
+
+                    <div class="kpi-row">
+                        <div class="kpi-mini" style="border-radius: 8px; background: #eff6ff; border-color: #bfdbfe;">
+                            <div style="font-size: 10px; color: #1e40af;">Chất lượng SRS</div>
+                            <div class="kpi-mini-val" style="color: #2563eb;">95/100</div>
+                        </div>
+                        <div class="kpi-mini" style="border-radius: 8px; background: #ecfdf5; border-color: #a7f3d0;">
+                            <div style="font-size: 10px; color: #065f46;">Chuẩn 3NF</div>
+                            <div class="kpi-mini-val" style="color: #059669;">PASS</div>
+                        </div>
+                    </div>
+                </div>
+
+                <ul class="specs-list">
+                    <li>Font: <b>Plus Jakarta Sans</b> (hiện đại, bo tròn)</li>
+                    <li>Thẻ Bento Cards đổ bóng nổi bật</li>
+                    <li>Huy hiệu bo viên thuốc tròn (pill badges)</li>
+                    <li>Tone màu xanh Cobalt năng động, tươi sáng</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- PHƯƠNG ÁN 3 -->
+        <div class="option-card opt-3">
+            <div class="option-banner">
+                <span class="badge">Biên tập</span>
+                <h2 class="option-title">3. Tài Liệu Biên Tập</h2>
+                <p class="option-desc">Phong cách GitBook/Craft. Tôn vinh khả năng đọc sâu, trình bày như trang tài liệu kỹ thuật số cao cấp dành cho Architect.</p>
+            </div>
+            <div class="mockup-body">
+                <div class="palette-row">
+                    <span style="font-size: 11px; font-weight: 600; color: #78716c;">Màu:</span>
+                    <div class="swatch" style="background: #0d9488;" title="Teal"></div>
+                    <div class="swatch" style="background: #1c1917;" title="Stone 900"></div>
+                    <div class="swatch" style="background: #fafaf9;" title="Warm Paper"></div>
+                    <div class="swatch" style="background: #15803d;" title="Forest Green"></div>
+                    <div class="swatch" style="background: #b45309;" title="Ochre"></div>
+                </div>
+
+                <div class="ui-preview">
+                    <div class="preview-header">
+                        <span style="font-weight: 700; color: #115e59;">📖 BA Architectural Studio</span>
+                        <span style="font-size: 10px; border: 1px solid #ccfbf1; color: #0f766e; padding: 2px 6px; border-radius: 4px;">v2.0</span>
+                    </div>
+
+                    <div style="font-size: 11px; font-weight: 600; color: #57534e; margin-bottom: 6px;">Kịch bản tham chiếu:</div>
+                    <div class="scenario-chips">
+                        <div class="chip active">Cinema Booking</div>
+                        <div class="chip">Bus Transit</div>
+                        <div class="chip">Warehouse</div>
+                    </div>
+
+                    <div class="fake-input" style="font-family: serif; background: #fafaf9;">
+                        Đặc tả yêu cầu phần mềm dựa trên biên bản họp phân tích chức năng...
+                    </div>
+
+                    <button class="btn-cta">Trích xuất Đặc tả & Sơ đồ</button>
+
+                    <div class="kpi-row">
+                        <div class="kpi-mini" style="border-left: 3px solid #0d9488;">
+                            <div style="font-size: 10px; color: #78716c;">Tiêu chuẩn IEEE</div>
+                            <div class="kpi-mini-val" style="color: #0f766e;">95/100</div>
+                        </div>
+                        <div class="kpi-mini" style="border-left: 3px solid #15803d;">
+                            <div style="font-size: 10px; color: #78716c;">Chuỗi truy vết</div>
+                            <div class="kpi-mini-val" style="color: #15803d;">100% RTM</div>
+                        </div>
+                    </div>
+                </div>
+
+                <ul class="specs-list">
+                    <li>Font: <b>Be Vietnam Pro</b> (vẻ đẹp ấn bản, dấu Việt tuyệt đối)</li>
+                    <li>Nền giấy ấm (`#FAFAF9`) giảm mỏi mắt khi đọc lâu</li>
+                    <li>Trình bày User Story theo phong cách bài báo cáo kỹ thuật</li>
+                    <li>Tone xanh Teal sang trọng, điềm đạm</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

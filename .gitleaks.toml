@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ignore synthetic mock tokens in test files"
+paths = [
+    '''tests/.*''',
+]
