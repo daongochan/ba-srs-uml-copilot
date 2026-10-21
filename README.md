@@ -6,7 +6,7 @@
 [![Google GenAI](https://img.shields.io/badge/Google%20GenAI-gemini--3.8--flash-4285F4.svg)](https://ai.google.dev/)
 [![Pydantic](https://img.shields.io/badge/Pydantic-v2.8%2B-E92063.svg)](https://docs.pydantic.dev/)
 [![SQLGlot](https://img.shields.io/badge/SQLGlot-AST%20Parser-green.svg)](https://github.com/tobymao/sqlglot)
-[![Testing](https://img.shields.io/badge/Tests-34%2F34%20Passed%20(100%25)-success.svg)](tests/)
+[![Testing](https://img.shields.io/badge/Tests-47%2F47%20Passed%20(100%25)-success.svg)](tests/)
 [![Standards](https://img.shields.io/badge/Standards-IEEE%2029148%20%7C%20BABOK%20v3%20%7C%20ISO%2FIEC%2025010%20%7C%203NF-purple.svg)](#3-core-technical-highlights)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -20,11 +20,14 @@
 - [3. Core Technical Highlights](#3-core-technical-highlights)
   - [3.1. Zero-Hallucination Structured Outputs (Pydantic V2 & Gemini)](#31-zero-hallucination-structured-outputs-pydantic-v2--gemini)
   - [3.2. BABOK v3 Traceability Matrix (RTM) & IEEE 29148 Quality Audit](#32-babok-v3-traceability-matrix-rtm--ieee-29148-quality-audit)
-  - [3.3. Deterministic AST Parsing & In-Memory SQLite Sandbox](#33-deterministic-ast-parsing--in-memory-sqlite-sandbox)
+  - [3.3. Deterministic AST Parsing & B-Tree Leftmost-Prefix DB Sandbox Auditor](#33-deterministic-ast-parsing--b-tree-leftmost-prefix-db-sandbox-auditor)
   - [3.4. Dynamic UML Modeling (Sequence & State Machine Diagrams)](#34-dynamic-uml-modeling-sequence--state-machine-diagrams)
   - [3.5. Human-in-the-Loop (HITL) Live Workbench](#35-human-in-the-loop-hitl-live-workbench)
   - [3.6. Resilient Lazy Visibility Rendering](#36-resilient-lazy-visibility-rendering)
   - [3.7. Enterprise Multi-Format Export Bundle](#37-enterprise-multi-format-export-bundle)
+  - [3.8. Enterprise LLMOps: SHA-256 Cache, Backoff Retry & Telemetry Dashboard](#38-enterprise-llmops-sha-256-cache-backoff-retry--telemetry-dashboard)
+  - [3.9. Set-Theoretic Cross-Model Consistency Verifier (RTM ↔ ERD ↔ SQL)](#39-set-theoretic-cross-model-consistency-verifier-rtm--erd--sql)
+  - [3.10. Interactive SVG Pan-Zoom Canvas & Vector Export Toolbar](#310-interactive-svg-pan-zoom-canvas--vector-export-toolbar)
 - [4. Project Structure](#4-project-structure)
 - [5. Quick Start & Installation Guide](#5-quick-start--installation-guide)
 - [6. Automated Testing & CI/CD Pipeline](#6-automated-testing--cicd-pipeline)
@@ -103,13 +106,13 @@ flowchart TD
 - **Ambiguity & Quality Audit:** Evaluates the specification against IEEE 29148 (completeness, consistency) and INVEST criteria (0–100 score).
 - **Proactive Elicitation Questions:** Detects missing business rules or scope gaps in raw meeting notes and formulates precise follow-up questions for stakeholders.
 
-### 3.3. Deterministic AST Parsing & In-Memory SQLite Sandbox
+### 3.3. Deterministic AST Parsing & B-Tree Leftmost-Prefix DB Sandbox Auditor
 - **SQLGlot AST Parsing:** Analyzes SQL DDL syntax deterministically to guarantee valid PostgreSQL / ANSI SQL constructs before rendering.
 - **In-Memory SQLite Sandbox (`sqlite3.connect(":memory:")`):**
-  - Transpiles DDL from PostgreSQL to SQLite dialect.
-  - Strips PostgreSQL-specific clauses that break SQLite: `NULLS LAST` / `NULLS FIRST`, `USING (BTREE|HASH|GIN|GIST)`, `CONCURRENTLY`, and `DEFAULT uuid_generate_v4()`.
-  - **Isolated Execution:** Executes `CREATE TABLE` and `CREATE INDEX` in independent phases so index edge cases never invalidate physical table audits.
-  - Inspects physical tables and foreign keys via `PRAGMA table_info` and `PRAGMA foreign_key_list`.
+  - Transpiles DDL from PostgreSQL to SQLite dialect with isolated execution of `CREATE TABLE` and `CREATE INDEX`.
+  - Strips PostgreSQL-specific clauses: `NULLS LAST` / `NULLS FIRST`, `USING (BTREE|HASH|GIN|GIST)`, `CONCURRENTLY`, and `DEFAULT uuid_generate_v4()`.
+  - **B-Tree Leftmost-Prefix Index Auditor:** Analyzes physical Primary Keys and all multi-column indexes using `PRAGMA table_info`, `PRAGMA index_list`, and `PRAGMA index_info`. Flags unindexed foreign keys that risk production Full Table Scans during `JOIN` or `ON DELETE CASCADE`.
+  - **One-Click Auto-Indexing:** Generates optimized `CREATE INDEX IF NOT EXISTS idx_{table}_{from_col} ON {table} ({from_col});` statements that can be injected with a single click to achieve a 100/100 performance score.
 
 ### 3.4. Dynamic UML Modeling (Sequence & State Machine Diagrams)
 - **Sequence Diagram (`sequenceDiagram`):** Illustrates the core business lifecycle, actor interactions, error flows, and asynchronous events with sanitized participant naming.
@@ -133,6 +136,22 @@ Packages all engineering artifacts into a single in-memory `.zip` bundle (no tem
 6. `diagrams/state_machine.mmd`: Raw Mermaid State Machine Diagram.
 7. `diagrams/erd_3nf.mmd`: Raw Mermaid 3NF Entity Relationship Diagram.
 
+### 3.8. Enterprise LLMOps: SHA-256 Cache, Backoff Retry & Telemetry Dashboard
+- **Content-Addressable SHA-256 Cache:** Normalizes whitespace and computes cryptographic hashes over raw inputs, enabling $O(1)$ memory retrieval and 100% token cost reduction on duplicate requests.
+- **Exponential Backoff Retry with Fail-Fast:** Automatically recovers from transient rate limits (HTTP 429) and server outages (HTTP 500, 503) using jittered backoff, while halting immediately on fatal client/auth errors (400, 401, 403, 404).
+- **LLMOps Telemetry Dashboard:** Displays latency (ms/s), prompt/completion token consumption, cache hit badges, and SHA-256 integrity fingerprints in real time.
+
+### 3.9. Set-Theoretic Cross-Model Consistency Verifier (RTM ↔ ERD ↔ SQL)
+- Evaluates architectural integrity using formal Set Operations:
+  - $T_{RTM} \setminus T_{DDL}$: Detects phantom tables referenced in requirements that lack physical database backing.
+  - $T_{DDL} \setminus T_{RTM}$: Detects orphan physical tables unmapped to business rules.
+  - $T_{DDL} \setminus T_{ERD}$: Detects schema tables omitted from entity relationship diagrams.
+- Computes an overall cross-model consistency score and provides an **Auto-Sync Artifacts** engine.
+
+### 3.10. Interactive SVG Pan-Zoom Canvas & Vector Export Toolbar
+- Replaces static diagram images with a dynamic interactive canvas supporting click-and-drag panning and mouse wheel zooming.
+- Floating toolbar includes Zoom In (`➕`), Zoom Out (`➖`), Reset 100% (`🔄`), zoom level indicators, and high-resolution SVG export (`⬇️ Tải SVG`).
+
 ---
 
 ## 4. Project Structure
@@ -149,7 +168,7 @@ ba-srs-uml-copilot/
 ├── requirements.txt             # Production & testing dependencies
 ├── src/
 │   ├── __init__.py
-│   ├── app.py                   # Streamlit Web App (4 Tabs, HITL Live Editor, Exporter)
+│   ├── app.py                   # Streamlit Web App (4 Tabs, Interactive Canvas, Telemetry)
 │   ├── data/
 │   │   ├── __init__.py
 │   │   └── sample_inputs.py     # 3 Real-world meeting note scenarios (Cinema, Bus, WMS)
@@ -159,18 +178,21 @@ ba-srs-uml-copilot/
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── ai_generator.py      # Gemini 3.8 Flash Integration with Structured Outputs
-│   │   └── exporter.py          # Multi-format report generator (Markdown, CSV, RAM ZIP)
+│   │   ├── exporter.py          # Multi-format report generator (Markdown, CSV, RAM ZIP)
+│   │   └── telemetry_cache.py   # SHA-256 In-Memory Cache, Backoff Retry & LLMOps Metrics
 │   └── validators/
 │       ├── __init__.py
-│       ├── syntax_validator.py  # Mermaid sanitization & SQLGlot AST parser
-│       └── db_sandbox.py        # SQLite in-memory DDL execution & FK audit sandbox
+│       ├── consistency_checker.py # Cross-model set-theoretic consistency verifier
+│       ├── db_sandbox.py        # SQLite in-memory DDL execution & B-Tree index auditor
+│       ├── requirements_linter.py # Deterministic static requirements linter
+│       └── syntax_validator.py  # Mermaid sanitization & SQLGlot AST parser
 └── tests/
     ├── __init__.py
     ├── test_ai_generator.py     # Unit tests for AI generator service & validation error handling
     ├── test_exporter.py         # Unit tests for Markdown, UTF-8 BOM CSV, and ZIP bundle (7 files)
     ├── test_markdown_export.py  # Unit tests for backward compatibility & SRS markdown export
     ├── test_schemas.py          # Unit tests for Pydantic schema validation & serialization
-    └── test_validators.py       # Unit tests for Mermaid sanitizer, SQLGlot, and DB Sandbox
+    └── test_validators.py       # Unit tests for Mermaid, SQL AST, Sandbox, Consistency & LLMOps Cache
 ```
 
 ---

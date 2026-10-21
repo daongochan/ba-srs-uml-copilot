@@ -3,6 +3,7 @@
 import os
 import re
 import json
+from typing import Optional
 import streamlit as st
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
@@ -11,7 +12,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.models.srs_schema import SRSDocument
-from src.services.ai_generator import generate_srs_from_notes
+from src.services.ai_generator import (
+    generate_srs_from_notes,
+    generate_srs_with_telemetry,
+)
+from src.services.telemetry_cache import default_srs_cache, TelemetryMetrics
 from src.services.exporter import (
     create_project_bundle_zip,
     generate_markdown_report,
@@ -429,6 +434,44 @@ with st.sidebar:
             st.rerun()
 
     st.divider()
+    st.subheader("⚡ Tối ưu Hiệu năng (LLMOps)")
+    force_cache_refresh = st.checkbox(
+        "⚡ Bỏ qua bộ nhớ đệm (Force Live AI Call)",
+        value=False,
+        help="Bắt buộc gọi trực tiếp Gemini API mà không sử dụng kết quả trong RAM cache",
+    )
+    if st.button("🗑️ Xóa Bộ nhớ đệm SHA-256 Cache", use_container_width=True):
+        default_srs_cache.clear()
+        st.toast("✅ Đã xóa toàn bộ bộ nhớ đệm SHA-256 Cache!", icon="🗑️")
+
+    telemetry: Optional[TelemetryMetrics] = st.session_state.get("telemetry_metrics")
+    if telemetry:
+        st.divider()
+        st.markdown("### 📡 Trạng thái Vận hành LLMOps")
+        st.caption("Chỉ số đo lường hiệu năng và chi phí thời gian thực.")
+
+        if telemetry.cache_hit:
+            st.success("⚡ **CACHE HIT (O(1) Memory)**")
+        else:
+            st.info("🌐 **LIVE GEMINI API**")
+
+        col_t1, col_t2 = st.columns(2)
+        with col_t1:
+            if telemetry.latency_ms >= 1000:
+                lat_str = f"{telemetry.latency_ms / 1000.0:.2f} s"
+            else:
+                lat_str = f"{telemetry.latency_ms:.1f} ms"
+            st.metric("⏱️ Độ trễ (Latency)", lat_str)
+        with col_t2:
+            st.metric("🔄 Lần Thử lại", f"{telemetry.retry_attempts}")
+
+        st.markdown(
+            f"**🪙 Chi phí Tokens:** `{telemetry.prompt_tokens}` prompt / "
+            f"`{telemetry.completion_tokens}` output (**Tổng: {telemetry.total_tokens}**)"
+        )
+        st.markdown(f"**🔑 SHA-256:** `{telemetry.content_hash[:12]}...`")
+
+    st.divider()
     st.markdown("""
     **Bộ tiêu chuẩn áp dụng:**
     - 📋 **IEEE 29148:** Requirements Engineering
@@ -485,8 +528,13 @@ if generate_clicked:
     else:
         with st.spinner("🤖 AI Principal BA & Enterprise Architect đang phân tích nghiệp vụ, chuẩn hóa 3NF và sinh sơ đồ..."):
             try:
-                result_doc = generate_srs_from_notes(meeting_notes_text, api_key)
+                result_doc, telemetry_metrics = generate_srs_with_telemetry(
+                    meeting_notes_text,
+                    api_key,
+                    force_refresh=force_cache_refresh,
+                )
                 st.session_state["srs_result"] = result_doc
+                st.session_state["telemetry_metrics"] = telemetry_metrics
                 # Dọn dẹp các key widget live edit để đồng bộ kết quả mới
                 for edit_k in [
                     "edit_seq_mermaid",
@@ -495,7 +543,17 @@ if generate_clicked:
                     "live_workbench_sql",
                 ]:
                     st.session_state.pop(edit_k, None)
-                st.toast("🎉 Đã sinh thành công Đặc tả Hệ thống & Sơ đồ Kiến trúc!", icon="✅")
+
+                if telemetry_metrics.cache_hit:
+                    st.toast(
+                        f"⚡ Tải từ Bộ nhớ đệm SHA-256 trong {telemetry_metrics.latency_ms:.1f}ms (Tiết kiệm 100% token)!",
+                        icon="⚡",
+                    )
+                else:
+                    st.toast(
+                        f"🎉 Đã sinh thành công Đặc tả Hệ thống qua Gemini API ({telemetry_metrics.total_tokens} tokens)!",
+                        icon="✅",
+                    )
             except Exception as e:
                 st.error(f"❌ Quá trình phân tích gặp sự cố: {str(e)}")
 

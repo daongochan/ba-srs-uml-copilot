@@ -1,11 +1,19 @@
 """AI Generation service using Google GenAI SDK to produce structured SRS documents."""
 
 import json
+import time
+from typing import Tuple
 from google import genai
 from google.genai import types
 
 from src.models.srs_schema import SRSDocument
 from src.validators.syntax_validator import clean_and_validate_mermaid, validate_sql_ddl
+from src.services.telemetry_cache import (
+    TelemetryMetrics,
+    compute_content_hash,
+    default_srs_cache,
+    execute_with_exponential_backoff,
+)
 
 SYSTEM_INSTRUCTION = """Bạn là một Principal Business Analyst (sở hữu chứng chỉ quốc tế IIBA CBAP) kiêm Senior Enterprise & Database Architect với hơn 15 năm kinh nghiệm.
 Nhiệm vụ của bạn là chuyển hóa các ghi chú thô từ buổi họp khách hàng (Meeting Notes) thành một bản Đặc tả Yêu cầu Phần mềm (SRS - Software Requirements Specification) hoàn chỉnh, chuẩn mực, chặt chẽ và sẵn sàng cho đội ngũ phát triển.
@@ -74,20 +82,25 @@ CÁC NGUYÊN TẮC BẮT BUỘC:
 """
 
 
-def generate_srs_from_notes(raw_notes: str, api_key: str) -> SRSDocument:
-    """Phân tích ghi chú họp khách hàng và sinh đặc tả SRS, sơ đồ UML và SQL DDL
-
-    sử dụng model gemini-3.8-flash với cơ chế ép kiểu Structured Output.
+def generate_srs_with_telemetry(
+    raw_notes: str,
+    api_key: str,
+    force_refresh: bool = False,
+    model_name: str = "gemini-3.8-flash",
+) -> Tuple[SRSDocument, TelemetryMetrics]:
+    """Phân tích ghi chú họp khách hàng và sinh đặc tả SRS kèm theo telemetry và caching SHA-256.
 
     Args:
         raw_notes: Nội dung văn bản ghi chú họp khách hàng thô.
         api_key: Khóa API Google Gemini.
+        force_refresh: Bỏ qua cache RAM và gọi live Gemini API.
+        model_name: Tên model Gemini sử dụng.
 
     Returns:
-        SRSDocument: Đối tượng Pydantic chứa toàn bộ thông tin đặc tả hệ thống.
+        Tuple[SRSDocument, TelemetryMetrics]: Bộ đôi tài liệu SRS và các chỉ số đo lường LLMOps.
 
     Raises:
-        ValueError: Nếu nội dung đầu vào hoặc API key trống, hoặc kết quả sinh lỗi.
+        ValueError: Nếu input hoặc API key không hợp lệ.
     """
     if not api_key or not api_key.strip():
         raise ValueError("GEMINI_API_KEY không được để trống. Vui lòng cấu hình API key.")
@@ -95,8 +108,29 @@ def generate_srs_from_notes(raw_notes: str, api_key: str) -> SRSDocument:
     if not raw_notes or not raw_notes.strip():
         raise ValueError("Nội dung ghi chú họp khách hàng không được để trống.")
 
-    client = genai.Client(api_key=api_key.strip())
+    content_hash = compute_content_hash(raw_notes, model_name=model_name)
 
+    # 1. Kiểm tra Bộ nhớ đệm (Cache Hit)
+    if not force_refresh:
+        cached_entry = default_srs_cache.get(content_hash)
+        if cached_entry:
+            cached_doc, original_metrics = cached_entry
+            t_start = time.perf_counter()
+            doc_copy = cached_doc.model_copy(deep=True)
+            lookup_latency_ms = (time.perf_counter() - t_start) * 1000.0
+            telemetry = TelemetryMetrics(
+                latency_ms=round(lookup_latency_ms, 2),
+                prompt_tokens=original_metrics.prompt_tokens,
+                completion_tokens=original_metrics.completion_tokens,
+                total_tokens=original_metrics.total_tokens,
+                cache_hit=True,
+                retry_attempts=0,
+                content_hash=content_hash,
+            )
+            return doc_copy, telemetry
+
+    # 2. Gọi Live API với Exponential Backoff Retry
+    client = genai.Client(api_key=api_key.strip())
     user_prompt = f"""Dưới đây là biên bản ghi chú họp khách hàng thô (Meeting Notes).
 Hãy phân tích nghiệp vụ, chuẩn hóa theo IEEE 29148 & BABOK, thiết kế sơ đồ Sequence, State Machine, ERD 3NF và sinh mã SQL DDL chi tiết:
 
@@ -105,30 +139,51 @@ Hãy phân tích nghiệp vụ, chuẩn hóa theo IEEE 29148 & BABOK, thiết k�
 ---
 """
 
-    response = client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents=user_prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
-            response_mime_type="application/json",
-            response_schema=SRSDocument,
-            temperature=0.2,
-        ),
+    start_time = time.perf_counter()
+
+    def _call_gemini():
+        return client.models.generate_content(
+            model=model_name,
+            contents=user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_INSTRUCTION,
+                response_mime_type="application/json",
+                response_schema=SRSDocument,
+                temperature=0.2,
+            ),
+        )
+
+    response, retry_attempts = execute_with_exponential_backoff(
+        _call_gemini, max_retries=3, base_delay=1.0
     )
+    latency_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
 
     if not response or not response.text:
         raise ValueError("Không nhận được phản hồi hợp lệ từ mô hình AI.")
 
-    # Parse JSON sang Pydantic Model
+    # 3. Trích xuất token usage từ metadata hoặc ước lượng fallback
+    prompt_tokens = 0
+    completion_tokens = 0
+    total_tokens = 0
+    if hasattr(response, "usage_metadata") and response.usage_metadata:
+        prompt_tokens = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
+        completion_tokens = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
+        total_tokens = getattr(response.usage_metadata, "total_token_count", 0) or 0
+
+    if not total_tokens:
+        prompt_tokens = max(1, len(user_prompt) // 4)
+        completion_tokens = max(1, len(response.text) // 4)
+        total_tokens = prompt_tokens + completion_tokens
+
+    # 4. Parse JSON sang Pydantic Model
     doc: SRSDocument = SRSDocument.model_validate_json(response.text)
 
-    # Tiền xử lý và làm sạch cú pháp Mermaid nếu có thẻ markdown bọc ngoài
+    # 5. Tiền xử lý và làm sạch cú pháp Mermaid
     try:
         doc.sequence_diagram_mermaid = clean_and_validate_mermaid(
             doc.sequence_diagram_mermaid, diagram_type="sequenceDiagram"
         )
     except Exception:
-        # Nếu validator phát hiện lỗi nhẹ, giữ nguyên hoặc cố gắng chuẩn hóa
         pass
 
     try:
@@ -146,4 +201,31 @@ Hãy phân tích nghiệp vụ, chuẩn hóa theo IEEE 29148 & BABOK, thiết k�
     except Exception:
         pass
 
+    telemetry = TelemetryMetrics(
+        latency_ms=latency_ms,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        cache_hit=False,
+        retry_attempts=retry_attempts,
+        content_hash=content_hash,
+    )
+
+    # Lưu vào bộ nhớ đệm
+    default_srs_cache.set(content_hash, doc.model_copy(deep=True), telemetry)
+
+    return doc, telemetry
+
+
+def generate_srs_from_notes(raw_notes: str, api_key: str) -> SRSDocument:
+    """Phân tích ghi chú họp khách hàng và sinh đặc tả SRS (Hàm tương thích ngược).
+
+    Args:
+        raw_notes: Nội dung văn bản ghi chú họp khách hàng thô.
+        api_key: Khóa API Google Gemini.
+
+    Returns:
+        SRSDocument: Đối tượng Pydantic chứa toàn bộ thông tin đặc tả hệ thống.
+    """
+    doc, _ = generate_srs_with_telemetry(raw_notes, api_key)
     return doc

@@ -1,5 +1,4 @@
-"""Unit tests for Mermaid and SQL DDL syntax validators."""
-
+import re
 import pytest
 from src.validators.syntax_validator import (
     clean_and_validate_mermaid,
@@ -12,6 +11,12 @@ from src.validators.consistency_checker import (
     extract_erd_entities,
     audit_cross_model_consistency,
     auto_sync_rtm_and_erd_with_ddl,
+)
+from src.services.telemetry_cache import (
+    TelemetryMetrics,
+    compute_content_hash,
+    DeterministicSRSCache,
+    execute_with_exponential_backoff,
 )
 from src.models.srs_schema import (
     AcceptanceCriterion,
@@ -863,5 +868,99 @@ CREATE TABLE cinema_halls (
         assert synced_audit["orphan_tables_in_ddl"] == []
         assert "cinema_halls" in synced_doc.traceability_matrix[0].related_tables
         assert "CINEMA_HALLS" in synced_doc.er_diagram_mermaid or "cinema_halls" in synced_doc.er_diagram_mermaid.lower()
+
+
+class TestTelemetryAndCache:
+    """Test suite for SHA-256 caching, Telemetry metrics, and Exponential Backoff Retry."""
+
+    def test_compute_content_hash_whitespace_invariance(self):
+        """Test 1: Kiểm tra compute_content_hash với 2 chuỗi có khoảng trắng thừa khác nhau
+        ('He thong   rap phim\n' và 'He thong rap phim') phải sinh ra cùng một mã SHA-256 giống hệt nhau 100%.
+        """
+        hash1 = compute_content_hash("He thong   rap phim\n", "gemini-3.8-flash")
+        hash2 = compute_content_hash("He thong rap phim", "gemini-3.8-flash")
+
+        assert hash1 == hash2
+        assert len(hash1) == 64
+        assert re.match(r"^[0-9a-f]{64}$", hash1) is not None
+
+    def test_deterministic_srs_cache_set_and_get(self):
+        """Test 2: Kiểm tra DeterministicSRSCache lưu và truy xuất đối tượng
+        trả về cache_hit == True và latency_ms < 5.0ms.
+        """
+        import time
+
+        cache = DeterministicSRSCache()
+        doc = SRSDocument(
+            project_title="Cached System",
+            business_objective="Obj",
+            sequence_diagram_mermaid="sequenceDiagram\n    A->>B: hi",
+            er_diagram_mermaid="erDiagram\n    A { int id PK }",
+            sql_ddl_script="CREATE TABLE a (id INT PRIMARY KEY);",
+        )
+        content_hash = compute_content_hash("Test notes input", "gemini-3.8-flash")
+        metrics = TelemetryMetrics(
+            latency_ms=150.0,
+            prompt_tokens=450,
+            completion_tokens=850,
+            total_tokens=1300,
+            cache_hit=False,
+            retry_attempts=0,
+            content_hash=content_hash,
+        )
+
+        assert cache.size() == 0
+        cache.set(content_hash, doc, metrics)
+        assert cache.size() == 1
+
+        # Truy xuất từ cache
+        t0 = time.perf_counter()
+        cached_result = cache.get(content_hash)
+        lookup_latency_ms = (time.perf_counter() - t0) * 1000.0
+
+        assert cached_result is not None
+        cached_doc, cached_metrics = cached_result
+        assert cached_doc.project_title == "Cached System"
+        assert lookup_latency_ms < 5.0  # O(1) in-memory lookup siêu tốc
+
+        # Xóa cache
+        cache.clear()
+        assert cache.size() == 0
+        assert cache.get(content_hash) is None
+
+    def test_execute_with_exponential_backoff_retry_success(self):
+        """Test 3: Kiểm tra execute_with_exponential_backoff với hàm mock bị lỗi ở lần 1
+        nhưng thành công ở lần 2 -> xác nhận trả về đúng kết quả và retry_attempts == 1.
+        """
+        call_count = 0
+
+        def mock_transient_failure():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ConnectionError("503 Service Unavailable: Transient network spike")
+            return "SUCCESS_DATA"
+
+        result, retries = execute_with_exponential_backoff(
+            mock_transient_failure, max_retries=3, base_delay=0.01
+        )
+
+        assert result == "SUCCESS_DATA"
+        assert retries == 1
+        assert call_count == 2
+
+    def test_execute_with_exponential_backoff_fail_fast_on_client_error(self):
+        """Kiểm tra dừng ngay lập tức (fail-fast, không retry) khi gặp lỗi 401 hoặc 400."""
+        call_count = 0
+
+        def mock_auth_error():
+            nonlocal call_count
+            call_count += 1
+            raise ValueError("401 UNAUTHENTICATED: Invalid Gemini API Key")
+
+        with pytest.raises(ValueError, match="401 UNAUTHENTICATED"):
+            execute_with_exponential_backoff(mock_auth_error, max_retries=3, base_delay=0.01)
+
+        assert call_count == 1  # Không retry
 
 
