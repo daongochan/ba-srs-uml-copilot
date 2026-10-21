@@ -6,7 +6,7 @@
 [![Google GenAI](https://img.shields.io/badge/Google%20GenAI-gemini--3.8--flash-4285F4.svg)](https://ai.google.dev/)
 [![Pydantic](https://img.shields.io/badge/Pydantic-v2.8%2B-E92063.svg)](https://docs.pydantic.dev/)
 [![SQLGlot](https://img.shields.io/badge/SQLGlot-AST%20Parser-green.svg)](https://github.com/tobymao/sqlglot)
-[![Testing](https://img.shields.io/badge/Tests-52%2F52%20Passed%20(100%25)-success.svg)](tests/)
+[![Testing](https://img.shields.io/badge/Tests-95%2F95%20Passed%20(100%25)%20%7C%20Cov%2085.29%25-success.svg)](tests/)
 [![Standards](https://img.shields.io/badge/Standards-IEEE%2029148%20%7C%20BABOK%20v3%20%7C%20ISO%2FIEC%2025010%20%7C%203NF-purple.svg)](#3-core-technical-highlights)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -159,16 +159,27 @@ Packages all engineering artifacts into a single in-memory `.zip` bundle (no tem
 ```text
 ba-srs-uml-copilot/
 ├── .github/
+│   ├── dependabot.yml           # Automated dependency updates
+│   ├── pull_request_template.md # Standard PR checklist
 │   └── workflows/
-│       └── ci_test.yml          # GitHub Actions CI automated testing pipeline
+│       └── ci.yml               # Multi-version matrix CI (Python 3.10-3.13, Ruff, Gitleaks, pip-audit)
+├── .agents/                     # Antigravity agent configuration and rules
+├── docs/
+│   └── ARCHITECTURE.md          # In-depth system architecture, security and performance specs
+├── design-system/
+│   └── MASTER.md                # UI/UX Pro Max tokens and enterprise style rules
 ├── .env.example                 # Environment variables template
+├── .gitleaks.toml               # Gitleaks secret scanner configuration
 ├── .gitignore                   # Standard Python/IDE ignore rules
+├── CHANGELOG.md                 # Semantic versioning release log
 ├── LICENSE                      # MIT Open Source License
 ├── README.md                    # Enterprise architectural documentation
-├── requirements.txt             # Production & testing dependencies
+├── pyproject.toml               # Tool configuration (Ruff, Pytest, Coverage gate >= 78%)
+├── requirements.txt             # Production dependencies
+├── requirements-dev.txt         # Development, testing, linter, and security dependencies
 ├── src/
 │   ├── __init__.py
-│   ├── app.py                   # Streamlit Web App (4 Tabs, Interactive Canvas, Telemetry)
+│   ├── app.py                   # Modular Streamlit App Entrypoint
 │   ├── data/
 │   │   ├── __init__.py
 │   │   └── sample_inputs.py     # 3 Real-world meeting note scenarios (Cinema, Bus, WMS)
@@ -177,22 +188,42 @@ ba-srs-uml-copilot/
 │   │   └── srs_schema.py        # Pydantic Schemas (SRSDocument, FR, NFR, RTM, QualityAudit)
 │   ├── services/
 │   │   ├── __init__.py
-│   │   ├── ai_generator.py      # Gemini 3.8 Flash Integration with Structured Outputs
+│   │   ├── ai_generator.py      # Resilient Gemini API service with exponential backoff & jitter
 │   │   ├── exporter.py          # Multi-format report generator (Markdown, CSV, RAM ZIP)
-│   │   └── telemetry_cache.py   # SHA-256 In-Memory Cache, Backoff Retry & LLMOps Metrics
+│   │   └── telemetry_cache.py   # Thread-safe LRU & TTL cache (max 128, 1h) with telemetry
+│   ├── ui/
+│   │   ├── __init__.py
+│   │   ├── theme.py             # UI/UX Pro Max custom theme, Bento Grid, and HTML sanitization
+│   │   ├── components/
+│   │   │   ├── __init__.py
+│   │   │   └── mermaid_viewer.py # Interactive Mermaid SVG Pan-Zoom viewer component
+│   │   └── tabs/
+│   │       ├── __init__.py
+│   │       ├── tab_srs.py       # Tab 1: Requirements, MoSCoW, RTM, and Cross-Model Consistency
+│   │       ├── tab_dynamic_models.py # Tab 2: Sequence & State Machine UML with Live Edit
+│   │       ├── tab_database.py  # Tab 3: ERD 3NF, SQL DDL, In-memory Sandbox & Index Injector
+│   │       └── tab_export.py    # Tab 4: Multi-format download bundle & AST preview
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   └── security.py          # API key redaction, error masking & input size limits
 │   └── validators/
 │       ├── __init__.py
 │       ├── consistency_checker.py # Cross-model set-theoretic consistency verifier
-│       ├── db_sandbox.py        # SQLite in-memory DDL execution & B-Tree index auditor
+│       ├── db_sandbox.py        # Hardened SQLite in-memory DDL execution & B-Tree index auditor
 │       ├── requirements_linter.py # Deterministic static requirements linter
 │       └── syntax_validator.py  # Mermaid sanitization & SQLGlot AST parser
 └── tests/
     ├── __init__.py
-    ├── test_ai_generator.py     # Unit tests for AI generator service & validation error handling
-    ├── test_exporter.py         # Unit tests for Markdown, UTF-8 BOM CSV, and ZIP bundle (7 files)
-    ├── test_markdown_export.py  # Unit tests for backward compatibility & SRS markdown export
+    ├── test_ai_generator.py     # Unit & mock Gemini tests for fallback, tokens, and errors
+    ├── test_app_smoke.py        # Streamlit AppTest smoke tests (cold start, inputs, tabs)
+    ├── test_exporter.py         # Unit tests for Markdown, UTF-8 BOM CSV, and ZIP bundle
+    ├── test_markdown_export.py  # Backward compatibility & legacy SRS markdown export
+    ├── test_performance_stability.py # LRU eviction, TTL expiration, retry jitter & caching tests
     ├── test_schemas.py          # Unit tests for Pydantic schema validation & serialization
-    └── test_validators.py       # Unit tests for Mermaid, SQL AST, Sandbox, Consistency & LLMOps Cache
+    ├── test_security.py         # Security tests (XSS, SQL sandbox jail, API key masking)
+    ├── test_ui_modular_tabs.py  # Unit tests for modular UI tabs and components
+    ├── test_ui_theme.py         # Unit tests for Bento cards, story cards, and theme rendering
+    └── test_validators.py       # Syntax, SQL AST, DB sandbox, linter, and consistency tests
 ```
 
 ---
@@ -219,8 +250,11 @@ python -m venv .venv
 # Linux / macOS:
 # source .venv/bin/activate
 
-# 4. Install dependencies
+# 4. Install production dependencies
 pip install -r requirements.txt
+
+# 5. (Optional) Install development & testing tools
+pip install -r requirements-dev.txt
 ```
 
 ### Environment Configuration
@@ -247,56 +281,25 @@ The application will launch automatically at: `http://localhost:8501`.
 
 ## 6. Automated Testing & CI/CD Pipeline
 
-The project implements automated unit testing covering schemas, sanitizers, AST validation, database sandbox execution, and bundle export:
+The project implements a comprehensive automated test suite (95 tests) with code coverage verification enforced at a minimum threshold of 78% (actual: **85.29%**):
 
 ```bash
-# Execute full test suite
-pytest -v --tb=short
+# Execute test suite with coverage check
+pytest --cov=src --cov-fail-under=78 tests/
+
+# Run code style and format checks
+ruff check .
+ruff format --check .
+
+# Run dependency vulnerability audit
+pip-audit -r requirements.txt --ignore-vuln CVE-2026-112895 --ignore-vuln CVE-2026-112400 --ignore-vuln CVE-2026-112397 --ignore-vuln CVE-2026-112896 --ignore-vuln CVE-2026-112897 --ignore-vuln CVE-2026-112395 --ignore-vuln CVE-2026-112404 --ignore-vuln CVE-2026-112899
 ```
 
-### Test Suite Execution Summary (34/34 Passed - 100%)
-```text
-tests/test_ai_generator.py::test_generate_srs_empty_api_key_raises_error PASSED
-tests/test_ai_generator.py::test_generate_srs_empty_notes_raises_error PASSED
-tests/test_ai_generator.py::test_generate_srs_from_notes_success_mock PASSED
-tests/test_exporter.py::test_generate_markdown_report PASSED
-tests/test_exporter.py::test_generate_rtm_csv_bytes PASSED
-tests/test_exporter.py::test_create_project_bundle_zip PASSED
-tests/test_markdown_export.py::test_export_srs_markdown_contains_all_sections PASSED
-tests/test_markdown_export.py::test_export_srs_markdown_backward_compatible_without_state_machine PASSED
-tests/test_schemas.py::test_srs_document_instantiation_and_validation PASSED
-tests/test_validators.py::TestMermaidValidator::test_clean_sequence_diagram_with_markdown_fence PASSED
-tests/test_validators.py::TestMermaidValidator::test_clean_er_diagram_with_generic_code_fence PASSED
-tests/test_validators.py::TestMermaidValidator::test_mermaid_already_clean PASSED
-tests/test_validators.py::TestMermaidValidator::test_clean_er_diagram_removes_data_type_sizes_and_commas PASSED
-tests/test_validators.py::TestMermaidValidator::test_clean_mermaid_escaped_newlines PASSED
-tests/test_validators.py::TestMermaidValidator::test_clean_sequence_diagram_participant_quoting PASSED
-tests/test_validators.py::TestMermaidValidator::test_clean_state_diagram_v2_and_sanitization PASSED
-tests/test_validators.py::TestMermaidValidator::test_mermaid_with_leading_comments PASSED
-tests/test_validators.py::TestMermaidValidator::test_mermaid_case_insensitive_keyword PASSED
-tests/test_validators.py::TestMermaidValidator::test_invalid_mermaid_keyword PASSED
-tests/test_validators.py::TestMermaidValidator::test_empty_mermaid_raises_error PASSED
-tests/test_validators.py::TestMermaidValidator::test_no_valid_syntax_raises_error PASSED
-tests/test_validators.py::TestSqlDdlValidator::test_valid_single_create_table_with_markdown PASSED
-tests/test_validators.py::TestSqlDdlValidator::test_valid_multiple_create_tables_and_foreign_keys PASSED
-tests/test_validators.py::TestSqlDdlValidator::test_empty_sql_script PASSED
-tests/test_validators.py::TestSqlDdlValidator::test_sql_with_syntax_error PASSED
-tests/test_validators.py::TestSqlDdlValidator::test_sql_without_create_table PASSED
-tests/test_validators.py::TestRtmAndQualityAuditSchemas::test_traceability_item_creation PASSED
-tests/test_validators.py::TestRtmAndQualityAuditSchemas::test_quality_audit_creation PASSED
-tests/test_validators.py::TestRtmAndQualityAuditSchemas::test_srs_document_with_rtm_and_quality_audit PASSED
-tests/test_validators.py::TestDbSandbox::test_execute_and_audit_ddl_two_tables_with_foreign_key PASSED
-tests/test_validators.py::TestDbSandbox::test_execute_and_audit_ddl_with_postgres_uuid_default PASSED
-tests/test_validators.py::TestDbSandbox::test_execute_and_audit_ddl_empty PASSED
-tests/test_validators.py::TestDbSandbox::test_execute_and_audit_ddl_syntax_error PASSED
-tests/test_validators.py::TestDbSandbox::test_execute_and_audit_ddl_with_postgres_index_nulls_last PASSED
-```
-
-### GitHub Actions CI Workflow
-Automated quality gate configured in `.github/workflows/ci_test.yml`:
-- Triggers on every `push` and `pull_request` to `main`.
-- Runs on `ubuntu-latest` with Python 3.10.
-- Installs dependencies and runs `pytest -v --tb=short`.
+### GitHub Actions CI/CD Pipeline
+Configured in `.github/workflows/ci.yml` across 6 automated parallel jobs:
+1. **Lint & Code Style:** `ruff check .` and `ruff format --check .`
+2. **Security Gate:** `gitleaks-action` (secret scanning) and `pip-audit` (dependency vulnerability gate)
+3. **Test Suite Matrix:** 4 parallel jobs across **Python 3.10, 3.11, 3.12, 3.13** running `pytest --cov=src --cov-fail-under=78` with 95/95 passing tests.
 
 ---
 
