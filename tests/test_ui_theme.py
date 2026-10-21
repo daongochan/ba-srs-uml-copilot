@@ -145,3 +145,55 @@ def test_render_kpi_card():
         rendered_card = mock_render_html.call_args[0][0]
         assert "SLA Performance" in rendered_card
         assert "99.9%" in rendered_card
+
+
+def test_editorial_tokens_and_styles():
+    """Verify editorial tokens definitions and style injection."""
+    from src.ui import tokens
+    from src.ui.styles import apply_editorial_styles, EDITORIAL_CSS
+    from unittest.mock import patch
+
+    assert tokens.TEAL_600 == "#0D9488"
+    assert tokens.STONE_50 == "#FAFAF9"
+    assert "Be Vietnam Pro" in tokens.FONT_PRIMARY
+    assert "editorial-banner" in EDITORIAL_CSS
+
+    with patch("streamlit.markdown") as mock_markdown:
+        apply_editorial_styles()
+        mock_markdown.assert_called_once()
+
+
+def test_editorial_components_render():
+    """Verify editorial header, kpi strip, story card, and empty state."""
+    from src.ui.components import (
+        render_editorial_header,
+        render_editorial_kpi_strip,
+        render_editorial_story_card,
+        render_editorial_empty_state,
+        render_editorial_tech_expander,
+    )
+    from tests.test_ui_modular_tabs import _build_test_doc
+    from unittest.mock import patch
+
+    with patch("src.ui.components.editorial.render_clean_html") as mock_html:
+        render_editorial_header(has_result=False, current_step=1)
+        assert mock_html.called
+
+    with patch("src.ui.components.editorial.render_clean_html") as mock_html:
+        doc = _build_test_doc()
+        render_editorial_kpi_strip(doc)
+        assert mock_html.called
+
+    with patch("src.ui.components.editorial.render_clean_html") as mock_html:
+        doc = _build_test_doc()
+        render_editorial_story_card(doc.functional_requirements[0])
+        assert mock_html.called
+
+    with patch("src.ui.components.editorial.render_clean_html") as mock_html:
+        render_editorial_empty_state()
+        assert mock_html.called
+
+    # Tech expander smoke test
+    render_editorial_tech_expander(None, None)
+
+
