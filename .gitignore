@@ -1,14 +1,40 @@
+# Python virtual environments & bytecode
 .env
 .venv/
 venv/
+ENV/
 __pycache__/
 .pytest_cache/
+.ruff_cache/
 *.pyc
 *.pyo
 *.pyd
+
+# Testing & Coverage
 .coverage
 htmlcov/
+.tox/
+.nox/
+
+# Build artifacts
 dist/
 build/
 *.egg-info/
+
+# Local databases & logs
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Workspace MCP config (in case secrets are added locally)
+.agents/mcp_config.json
+.agent/mcp_config.json
+
+# Temporary directories
 .ui-ux-skill-temp/
+node_modules/
+
+# OS specific files
+.DS_Store
+Thumbs.db

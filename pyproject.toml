@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ba-srs-uml-copilot"
+version = "1.0.0"
+description = "AI Principal Business Analyst & System Architect Copilot"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "streamlit>=1.38.0",
+    "pydantic>=2.8.0",
+    "google-genai>=0.3.0",
+    "python-dotenv>=1.0.1",
+    "sqlglot>=25.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.17.0",
+    "pre-commit>=4.0.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = [
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".agent",
+    ".agents",
+    "dist",
+    "build",
+    "design-system",
+]
+
+[tool.ruff.lint]
+# Syntax errors, runtime execution issues, and broken name references
+select = [
+    "E9",
+    "F63",
+    "F7",
+    "F82",
+    "F821",  # Undefined name
+    "F822",  # Undefined name in __all__
+]
+ignore = [
+    "E501",  # Line length
+    "E402",  # Module import position
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"

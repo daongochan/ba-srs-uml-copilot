@@ -1,12 +1,12 @@
 # 📐 BA & System Architect Copilot | Enterprise Requirements, UML Modeling & 3NF Database Sandbox
 
-[![CI Quality Gate](https://github.com/daongochan/ba-srs-uml-copilot/actions/workflows/ci_test.yml/badge.svg)](https://github.com/daongochan/ba-srs-uml-copilot/actions/workflows/ci_test.yml)
+[![CI Quality Gate](https://github.com/daongochan/ba-srs-uml-copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/daongochan/ba-srs-uml-copilot/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.38%2B-FF4B4B.svg)](https://streamlit.io/)
 [![Google GenAI](https://img.shields.io/badge/Google%20GenAI-gemini--3.8--flash-4285F4.svg)](https://ai.google.dev/)
 [![Pydantic](https://img.shields.io/badge/Pydantic-v2.8%2B-E92063.svg)](https://docs.pydantic.dev/)
 [![SQLGlot](https://img.shields.io/badge/SQLGlot-AST%20Parser-green.svg)](https://github.com/tobymao/sqlglot)
-[![Testing](https://img.shields.io/badge/Tests-47%2F47%20Passed%20(100%25)-success.svg)](tests/)
+[![Testing](https://img.shields.io/badge/Tests-52%2F52%20Passed%20(100%25)-success.svg)](tests/)
 [![Standards](https://img.shields.io/badge/Standards-IEEE%2029148%20%7C%20BABOK%20v3%20%7C%20ISO%2FIEC%2025010%20%7C%203NF-purple.svg)](#3-core-technical-highlights)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
