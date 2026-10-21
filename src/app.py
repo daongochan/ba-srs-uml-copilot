@@ -18,6 +18,7 @@ from src.services.exporter import generate_markdown_report
 from src.data.sample_inputs import SAMPLE_SCENARIOS
 from src.ui.theme import (
     apply_custom_theme,
+    render_html,
     render_header_banner,
     render_telemetry_widget,
 )
@@ -55,9 +56,18 @@ for ss_key in ["srs_result", "doc"]:
 # SIDEBAR
 # -------------------------------------------------------------
 with st.sidebar:
-    st.image("https://img.icons8.com/isometric/100/blueprint.png", width=64)
-    st.markdown("### 🛠️ Trung tâm Điều khiển")
-    st.caption("AI Principal BA & Solution Architect Workbench")
+    sidebar_header_html = """
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 4px 0;">
+        <div style="width: 44px; height: 44px; background: linear-gradient(135deg, #4f46e5, #3b82f6); border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3); font-size: 22px;">
+            📐
+        </div>
+        <div>
+            <div style="font-size: 17px; font-weight: 800; color: #0f172a; line-height: 1.2;">Trung tâm Điều khiển</div>
+            <div style="font-size: 11.5px; color: #64748b; font-weight: 500;">AI Principal BA & Architect</div>
+        </div>
+    </div>
+    """
+    render_html(sidebar_header_html)
 
     # Đóng gói API Key Card
     with st.container(border=True):
@@ -119,8 +129,7 @@ with st.sidebar:
         st.markdown("##### 📡 Giám sát Chỉ số Vận hành LLMOps")
         render_telemetry_widget(telemetry)
 
-    st.markdown(
-        """
+    standards_footer = """
     <div style="font-size: 11px; color: #64748b; margin-top: 16px; line-height: 1.6; border-top: 1px solid #e2e8f0; padding-top: 12px;">
         <strong>Hệ quy chiếu Tiêu chuẩn:</strong><br>
         • <b>IEEE 29148:</b> Requirements Engineering<br>
@@ -129,9 +138,8 @@ with st.sidebar:
         • <b>3NF Sandbox:</b> Boyce-Codd Normal Form<br>
         • <b>Core LLM:</b> <code>gemini-3.8-flash</code>
     </div>
-    """,
-        unsafe_allow_html=True,
-    )
+    """
+    render_html(standards_footer)
 
 # -------------------------------------------------------------
 # MAIN CONTENT AREA

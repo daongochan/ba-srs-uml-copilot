@@ -2,8 +2,10 @@
 
 from src.ui.theme import (
     apply_custom_theme,
+    render_html,
     render_header_banner,
     render_bento_card,
+    render_kpi_card,
     render_bento_grid,
     render_telemetry_widget,
     render_user_story_card,
@@ -18,8 +20,10 @@ from src.ui.tabs import (
 
 __all__ = [
     "apply_custom_theme",
+    "render_html",
     "render_header_banner",
     "render_bento_card",
+    "render_kpi_card",
     "render_bento_grid",
     "render_telemetry_widget",
     "render_user_story_card",

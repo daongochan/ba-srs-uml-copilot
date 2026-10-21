@@ -10,6 +10,8 @@ from src.ui.theme import (
     render_bento_grid,
     render_telemetry_widget,
     render_user_story_card,
+    render_html,
+    render_kpi_card,
 )
 
 
@@ -95,3 +97,45 @@ def test_theme_functions_smoke():
     apply_custom_theme()
     render_header_banner(has_result=False)
     render_header_banner(has_result=True)
+
+
+def test_render_html_prevents_commonmark_indentation_leak():
+    """Verify render_html strips leading line spaces and consecutive blank lines."""
+    from unittest.mock import patch
+
+    with patch("streamlit.markdown") as mock_markdown:
+        raw_indented_html = """
+        <div class="test-container">
+            <div class="bento-progress-track">
+                <span>Value</span>
+            </div>
+        </div>
+        """
+        render_html(raw_indented_html)
+        mock_markdown.assert_called_once()
+        passed_arg = mock_markdown.call_args[0][0]
+        # Should not have any line starting with 4 or more spaces
+        for line in passed_arg.splitlines():
+            assert not line.startswith("    "), f"Line still indented with 4 spaces: {line}"
+        assert '<div class="test-container">' in passed_arg
+        assert mock_markdown.call_args[1].get("unsafe_allow_html") is True
+
+
+def test_render_kpi_card():
+    """Verify render_kpi_card renders directly through render_html."""
+    from unittest.mock import patch
+
+    with patch("src.ui.theme.render_html") as mock_render_html:
+        render_kpi_card(
+            title="SLA Performance",
+            value="99.9%",
+            subtitle="Uptime Guarantee",
+            score_pct=99.9,
+            badge_text="Gold SLA",
+            badge_type="success",
+            icon="⚡",
+        )
+        mock_render_html.assert_called_once()
+        rendered_card = mock_render_html.call_args[0][0]
+        assert "SLA Performance" in rendered_card
+        assert "99.9%" in rendered_card

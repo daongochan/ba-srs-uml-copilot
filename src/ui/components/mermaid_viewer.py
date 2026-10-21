@@ -147,7 +147,11 @@ def render_mermaid(mermaid_code: str, height: int = 560, diagram_type: str = "")
                 startOnLoad: false,
                 theme: 'neutral',
                 securityLevel: 'strict',
-                fontFamily: 'Inter, system-ui, sans-serif'
+                fontFamily: 'Inter, system-ui, sans-serif',
+                er: {{ useMaxWidth: false }},
+                sequence: {{ useMaxWidth: false }},
+                flowchart: {{ useMaxWidth: false }},
+                state: {{ useMaxWidth: false }}
             }});
 
             let scale = 1.0;
@@ -192,19 +196,25 @@ def render_mermaid(mermaid_code: str, height: int = 560, diagram_type: str = "")
                 const container = document.getElementById('mermaid-container');
                 const svg = container.querySelector('svg');
                 if (!svg || !viewport) return;
+                svg.style.maxWidth = 'none';
 
                 const vWidth = viewport.offsetWidth || 800;
                 const vHeight = viewport.offsetHeight || 500;
-                const sWidth = svg.getBoundingClientRect().width || svg.viewBox.baseVal.width || 600;
-                const sHeight = svg.getBoundingClientRect().height || svg.viewBox.baseVal.height || 400;
+                const sWidth = svg.getBoundingClientRect().width || (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width) || 600;
+                const sHeight = svg.getBoundingClientRect().height || (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.height) || 400;
 
-                const pad = 64;
+                const pad = 48;
                 const scaleX = (vWidth - pad) / Math.max(sWidth, 100);
                 const scaleY = (vHeight - pad) / Math.max(sHeight, 100);
-                scale = Math.min(Math.min(scaleX, scaleY), 1.1);
-                scale = Math.max(scale, 0.4);
+                const fitScale = Math.min(scaleX, scaleY);
+                // Ensure initial scale remains clear and legible without requiring 400% zoom
+                scale = Math.min(Math.max(fitScale, 0.85), 1.15);
 
-                pointX = Math.max(20, (vWidth - sWidth * scale) / 2);
+                if (sWidth * scale > vWidth) {{
+                    pointX = 24;
+                }} else {{
+                    pointX = Math.max(20, (vWidth - sWidth * scale) / 2);
+                }}
                 pointY = Math.max(20, (vHeight - sHeight * scale) / 2);
                 updateTransform();
             }}
@@ -235,6 +245,10 @@ def render_mermaid(mermaid_code: str, height: int = 560, diagram_type: str = "")
                 try {{
                     const {{ svg }} = await mermaid.render(renderId, rawCode);
                     container.innerHTML = svg;
+                    const renderedSvg = container.querySelector('svg');
+                    if (renderedSvg) {{
+                        renderedSvg.style.maxWidth = 'none';
+                    }}
                     setTimeout(resetView, 60);
                 }} catch (err) {{
                     console.error("Mermaid Render Error:", err);

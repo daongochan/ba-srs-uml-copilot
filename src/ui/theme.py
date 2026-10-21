@@ -4,8 +4,24 @@ Based on UI/UX Pro Max Design Intelligence (Tech & SaaS -> Developer Tool / IDE 
 """
 
 import html
+import re
 from typing import List, Dict, Any, Optional
 import streamlit as st
+
+
+def render_html(html_str: str) -> None:
+    """Loại bỏ thụt lề đầu dòng và các dòng trống thừa trước khi gọi st.markdown.
+
+    Biện pháp này triệt tiêu hoàn toàn lỗi CommonMark hiểu nhầm chuỗi HTML
+    thành Markdown Indented Code Block (<pre><code>) khi có dòng trống đi kèm thụt lề >= 4 spaces.
+    """
+    if not html_str:
+        return
+    # Loại bỏ khoảng trắng / tab ở đầu mỗi dòng
+    cleaned = re.sub(r"^[ \t]+", "", html_str, flags=re.MULTILINE)
+    # Loại bỏ các dòng trống liên tiếp
+    cleaned = re.sub(r"\n\s*\n", "\n", cleaned).strip()
+    st.markdown(cleaned, unsafe_allow_html=True)
 
 
 def apply_custom_theme() -> None:
@@ -92,16 +108,15 @@ def apply_custom_theme() -> None:
         }
 
         /* =====================================================================
-           3. TOP NAVIGATION BANNER & WORKFLOW STEPPER
+           3. TOP NAVIGATION BANNER (HIGH-CONTRAST LIGHT INDIGO SURFACE)
            ===================================================================== */
         .workbench-header {
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            border: 1px solid #334155;
+            background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%) !important;
+            border: 1px solid #c7d2fe !important;
             border-radius: var(--radius-lg);
-            padding: 20px 24px;
+            padding: 22px 26px;
             margin-bottom: 24px;
-            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.2);
-            color: #ffffff;
+            box-shadow: 0 4px 14px -2px rgba(79, 70, 229, 0.08), 0 1px 3px rgba(15, 23, 42, 0.05);
         }
 
         .header-top-row {
@@ -120,29 +135,32 @@ def apply_custom_theme() -> None:
         }
 
         .brand-logo-badge {
-            width: 44px;
-            height: 44px;
+            width: 48px;
+            height: 48px;
             background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
-            border-radius: 10px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 24px;
-            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
+            flex-shrink: 0;
         }
 
         .brand-title {
-            font-size: 22px;
-            font-weight: 800;
-            color: #ffffff;
-            margin: 0;
-            line-height: 1.2;
+            font-size: 24px !important;
+            font-weight: 800 !important;
+            color: #1e1b4b !important;
+            margin: 0 !important;
+            line-height: 1.25 !important;
+            letter-spacing: -0.025em;
         }
 
         .brand-subtitle {
-            font-size: 13px;
-            color: #94a3b8;
-            margin: 2px 0 0 0;
+            font-size: 13.5px !important;
+            color: #475569 !important;
+            margin: 4px 0 0 0 !important;
+            font-weight: 500 !important;
         }
 
         .standards-pill-group {
@@ -156,61 +174,81 @@ def apply_custom_theme() -> None:
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            padding: 4px 10px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            padding: 5px 12px;
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
-            color: #e2e8f0;
-            backdrop-filter: blur(8px);
+            color: #334155;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
         }
 
         .standard-pill.model-pill {
-            background: rgba(79, 70, 229, 0.25);
-            border-color: rgba(99, 102, 241, 0.5);
-            color: #c7d2fe;
+            background: #eff6ff;
+            border-color: #bfdbfe;
+            color: #1d4ed8;
+        }
+
+        .standard-pill.ieee-pill {
+            background: #fdf4ff;
+            border-color: #f5d0fe;
+            color: #86198f;
+        }
+
+        .standard-pill.babok-pill {
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+            color: #166534;
+        }
+
+        .standard-pill.sandbox-pill {
+            background: #fff7ed;
+            border-color: #fed7aa;
+            color: #9a3412;
         }
 
         /* Workflow Stepper */
         .workflow-stepper {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 10px;
-            padding-top: 14px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px 14px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: var(--radius-md);
+            margin-top: 14px;
         }
 
         .step-item {
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 8px 12px;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: var(--radius-md);
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 6px;
             font-size: 12px;
-            color: #94a3b8;
+            color: #64748b;
+            font-weight: 500;
         }
 
         .step-item.active {
-            background: rgba(79, 70, 229, 0.2);
-            border-color: rgba(99, 102, 241, 0.5);
-            color: #ffffff;
-            font-weight: 600;
+            background: #eef2ff;
+            color: #4f46e5;
+            font-weight: 700;
         }
 
         .step-item.completed {
-            background: rgba(16, 185, 129, 0.15);
-            border-color: rgba(16, 185, 129, 0.4);
-            color: #6ee7b7;
+            background: #ecfdf5;
+            color: #059669;
+            font-weight: 600;
         }
 
         .step-number {
             width: 22px;
             height: 22px;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.12);
+            background: #f1f5f9;
+            color: #64748b;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -231,13 +269,6 @@ def apply_custom_theme() -> None:
         /* =====================================================================
            4. BENTO KPI GRID DASHBOARD
            ===================================================================== */
-        .bento-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 14px;
-            margin-bottom: 20px;
-        }
-
         .bento-card {
             background: var(--bg-surface);
             border: 1px solid var(--border-subtle);
@@ -247,14 +278,15 @@ def apply_custom_theme() -> None:
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            min-height: 120px;
+            min-height: 135px;
+            height: 100%;
             transition: all 0.2s ease;
         }
 
         .bento-card:hover {
             border-color: var(--brand-primary-border);
             box-shadow: var(--shadow-md);
-            transform: translateY(-1px);
+            transform: translateY(-2px);
         }
 
         .bento-card-top {
@@ -262,14 +294,15 @@ def apply_custom_theme() -> None:
             align-items: center;
             justify-content: space-between;
             margin-bottom: 8px;
+            gap: 8px;
         }
 
         .bento-title {
-            font-size: 13px;
-            font-weight: 600;
+            font-size: 12px;
+            font-weight: 700;
             color: var(--text-muted);
             text-transform: uppercase;
-            letter-spacing: 0.03em;
+            letter-spacing: 0.04em;
         }
 
         .bento-badge {
@@ -280,6 +313,7 @@ def apply_custom_theme() -> None:
             display: inline-flex;
             align-items: center;
             gap: 4px;
+            white-space: nowrap;
         }
 
         .bento-badge.success {
@@ -307,18 +341,19 @@ def apply_custom_theme() -> None:
         }
 
         .bento-value {
-            font-size: 26px;
-            font-weight: 800;
-            color: var(--text-heading);
-            line-height: 1.1;
-            margin-bottom: 6px;
-            font-feature-settings: "tnum";
+            font-size: 28px !important;
+            font-weight: 800 !important;
+            color: var(--text-heading) !important;
+            line-height: 1.15 !important;
+            margin: 4px 0 !important;
+            letter-spacing: -0.02em;
         }
 
         .bento-subtitle {
-            font-size: 12px;
+            font-size: 11.5px;
             color: var(--text-muted);
-            margin-bottom: 8px;
+            margin-bottom: 10px;
+            line-height: 1.4;
         }
 
         .bento-progress-track {
@@ -327,6 +362,7 @@ def apply_custom_theme() -> None:
             background: var(--bg-muted);
             border-radius: 3px;
             overflow: hidden;
+            margin-top: auto;
         }
 
         .bento-progress-bar {
@@ -341,7 +377,7 @@ def apply_custom_theme() -> None:
         .bento-progress-bar.info { background: linear-gradient(90deg, #4f46e5, #3b82f6); }
 
         /* =====================================================================
-           5. SIDEBAR & TELEMETRY PANEL
+           5. SIDEBAR & TELEMETRY PANEL (CLEAN VERTICAL STACKROWS)
            ===================================================================== */
         section[data-testid="stSidebar"] {
             background-color: #ffffff !important;
@@ -349,13 +385,12 @@ def apply_custom_theme() -> None:
         }
 
         .telemetry-card {
-            background: #0f172a;
-            border: 1px solid #1e293b;
-            border-radius: var(--radius-lg);
-            padding: 16px;
-            color: #ffffff;
-            margin-top: 12px;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: var(--radius-md);
+            padding: 14px;
+            margin-top: 10px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
         }
 
         .telemetry-status-badge {
@@ -367,68 +402,93 @@ def apply_custom_theme() -> None:
             font-size: 11px;
             font-weight: 700;
             letter-spacing: 0.04em;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
+            width: 100%;
+            justify-content: center;
         }
 
         .telemetry-status-badge.hit {
-            background: rgba(16, 185, 129, 0.2);
-            color: #34d399;
-            border: 1px solid rgba(16, 185, 129, 0.4);
+            background: #ecfdf5;
+            color: #059669;
+            border: 1px solid #a7f3d0;
         }
 
         .telemetry-status-badge.live {
-            background: rgba(59, 130, 246, 0.2);
-            color: #60a5fa;
-            border: 1px solid rgba(59, 130, 246, 0.4);
+            background: #eff6ff;
+            color: #2563eb;
+            border: 1px solid #bfdbfe;
         }
 
-        .telemetry-metric-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 12px;
+        .telemetry-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 10px;
         }
 
-        .telemetry-cell {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: var(--radius-md);
-            padding: 8px 10px;
+        .telemetry-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+            border-bottom: 1px dashed #e2e8f0;
+            font-size: 12px;
         }
 
-        .telemetry-label {
-            font-size: 11px;
-            color: #94a3b8;
-            margin-bottom: 2px;
+        .telemetry-row:last-child {
+            border-bottom: none;
         }
 
-        .telemetry-val {
-            font-family: var(--font-mono);
-            font-size: 14px;
+        .telemetry-row-total {
             font-weight: 700;
-            color: #ffffff;
+            color: #0f172a;
+            border-top: 1px solid #cbd5e1;
+            padding-top: 6px;
+            margin-top: 2px;
+        }
+
+        .telemetry-row-label {
+            color: #475569;
+            font-size: 11.5px;
+        }
+
+        .telemetry-row-val {
+            font-family: var(--font-mono);
+            font-weight: 700;
+            color: #0f172a;
+            font-size: 12px;
         }
 
         .telemetry-token-bar-wrap {
-            background: rgba(255, 255, 255, 0.06);
+            background: #e2e8f0;
             border-radius: 4px;
             height: 6px;
             overflow: hidden;
-            margin: 6px 0;
+            margin: 6px 0 10px 0;
             display: flex;
         }
 
         .token-prompt-fill { background: #3b82f6; height: 100%; }
         .token-completion-fill { background: #10b981; height: 100%; }
 
-        .telemetry-hash {
+        .telemetry-hash-box {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .telemetry-hash-code {
             font-family: var(--font-mono);
             font-size: 11px;
-            color: #cbd5e1;
-            background: rgba(255, 255, 255, 0.06);
-            padding: 3px 6px;
+            background: #e2e8f0;
+            padding: 2px 6px;
             border-radius: 4px;
-            word-break: break-all;
+            color: #334155;
+            font-weight: 600;
         }
 
         /* =====================================================================
@@ -457,29 +517,30 @@ def apply_custom_theme() -> None:
 
         .story-req-id {
             font-family: var(--font-mono);
-            font-weight: 700;
             font-size: 13px;
-            color: var(--text-muted);
+            font-weight: 700;
+            color: var(--brand-primary);
         }
 
         .story-title {
-            font-size: 15px;
+            font-size: 16px;
             font-weight: 700;
             color: var(--text-heading);
-            margin: 0;
+            margin: 0 0 6px 0;
         }
 
         .story-narrative {
             font-size: 13.5px;
+            line-height: 1.5;
             color: var(--text-body);
             background: var(--bg-muted);
-            border-radius: var(--radius-md);
             padding: 10px 14px;
-            margin: 10px 0;
-            border-left: 3px solid var(--border-strong);
+            border-radius: var(--radius-md);
+            margin-bottom: 12px;
             font-style: italic;
         }
 
+        /* Gherkin BDD Blocks */
         .gherkin-box {
             background: #ffffff;
             border: 1px solid var(--border-subtle);
@@ -491,9 +552,14 @@ def apply_custom_theme() -> None:
 
         .gherkin-line {
             display: flex;
-            gap: 8px;
-            margin-bottom: 4px;
             align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 4px;
+            line-height: 1.5;
+        }
+
+        .gherkin-line:last-child {
+            margin-bottom: 0;
         }
 
         .gherkin-token {
@@ -504,6 +570,7 @@ def apply_custom_theme() -> None:
             border-radius: 4px;
             min-width: 48px;
             text-align: center;
+            flex-shrink: 0;
         }
 
         .token-given { background: #fef3c7; color: #b45309; }
@@ -540,50 +607,48 @@ def apply_custom_theme() -> None:
 
 
 def render_header_banner(has_result: bool = False) -> None:
-    """Hiển thị Header Bar thương hiệu và Workflow Stepper chuẩn Enterprise."""
+    """Hiển thị Header Bar thương hiệu và Workflow Stepper chuẩn Enterprise, độ tương phản cao."""
     step1_class = "completed" if has_result else "active"
     step2_class = "completed" if has_result else ""
     step3_class = "active" if has_result else ""
     step4_class = "active" if has_result else ""
 
-    html = f"""
-    <div class="workbench-header">
-        <div class="header-top-row">
-            <div class="brand-title-wrap">
-                <div class="brand-logo-badge">📐</div>
-                <div>
-                    <h1 class="brand-title">BA & System Architect Copilot</h1>
-                    <p class="brand-subtitle">Enterprise Requirements Engineering, Dynamic UML & 3NF Database Workbench</p>
-                </div>
-            </div>
-            <div class="standards-pill-group">
-                <span class="standard-pill model-pill">🤖 gemini-3.8-flash</span>
-                <span class="standard-pill">📋 IEEE 29148:2018</span>
-                <span class="standard-pill">🏛️ BABOK v3</span>
-                <span class="standard-pill">🗄️ 3NF Sandbox</span>
-            </div>
-        </div>
-        <div class="workflow-stepper">
-            <div class="step-item {step1_class}">
-                <span class="step-number">1</span>
-                <span>Elicitation Notes</span>
-            </div>
-            <div class="step-item {step2_class}">
-                <span class="step-number">2</span>
-                <span>AI Synthesis</span>
-            </div>
-            <div class="step-item {step3_class}">
-                <span class="step-number">3</span>
-                <span>Deterministic Audit</span>
-            </div>
-            <div class="step-item {step4_class}">
-                <span class="step-number">4</span>
-                <span>Export Bundle</span>
-            </div>
-        </div>
-    </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
+    banner_html = f"""<div class="workbench-header">
+<div class="header-top-row">
+<div class="brand-title-wrap">
+<div class="brand-logo-badge">📐</div>
+<div>
+<h1 class="brand-title">BA & System Architect Copilot</h1>
+<p class="brand-subtitle">Enterprise Requirements Engineering, Dynamic UML & 3NF Database Workbench</p>
+</div>
+</div>
+<div class="standards-pill-group">
+<span class="standard-pill model-pill">🤖 gemini-3.8-flash</span>
+<span class="standard-pill ieee-pill">📋 IEEE 29148:2018</span>
+<span class="standard-pill babok-pill">🏛️ BABOK v3</span>
+<span class="standard-pill sandbox-pill">🗄️ 3NF Sandbox</span>
+</div>
+</div>
+<div class="workflow-stepper">
+<div class="step-item {step1_class}">
+<span class="step-number">1</span>
+<span>1. Elicitation Notes</span>
+</div>
+<div class="step-item {step2_class}">
+<span class="step-number">2</span>
+<span>2. AI Synthesis</span>
+</div>
+<div class="step-item {step3_class}">
+<span class="step-number">3</span>
+<span>3. Deterministic Audit</span>
+</div>
+<div class="step-item {step4_class}">
+<span class="step-number">4</span>
+<span>4. Export Bundle</span>
+</div>
+</div>
+</div>"""
+    render_html(banner_html)
 
 
 def render_bento_card(
@@ -595,7 +660,7 @@ def render_bento_card(
     badge_type: str = "info",
     icon: Optional[str] = None,
 ) -> str:
-    """Tạo mã HTML cho một thẻ Bento KPI Card."""
+    """Tạo mã HTML cho một thẻ Bento KPI Card, bảo đảm không có khoảng thụt lề thừa hay dòng trống."""
     safe_title = html.escape(str(title))
     safe_value = html.escape(str(value))
     safe_subtitle = html.escape(str(subtitle))
@@ -608,44 +673,67 @@ def render_bento_card(
 
     progress_html = ""
     if score_pct is not None:
-        capped_pct = max(0, min(100, float(score_pct)))
+        capped_pct = max(0.0, min(100.0, float(score_pct)))
         color_class = "success" if capped_pct >= 90 else ("warning" if capped_pct >= 75 else "danger")
-        progress_html = f"""
-        <div class="bento-progress-track">
-            <div class="bento-progress-bar {color_class}" style="width: {capped_pct}%;"></div>
-        </div>
-        """
+        progress_html = (
+            f'<div class="bento-progress-track">'
+            f'<div class="bento-progress-bar {color_class}" style="width: {capped_pct}%;"></div>'
+            f"</div>"
+        )
 
-    return f"""
-    <div class="bento-card">
-        <div>
-            <div class="bento-card-top">
-                <span class="bento-title">{icon_str}{safe_title}</span>
-                {badge_html}
-            </div>
-            <div class="bento-value">{safe_value}</div>
-            <div class="bento-subtitle">{safe_subtitle}</div>
-        </div>
-        {progress_html}
-    </div>
-    """
+    card_html = (
+        f'<div class="bento-card">'
+        f"<div>"
+        f'<div class="bento-card-top">'
+        f'<span class="bento-title">{icon_str}{safe_title}</span>'
+        f"{badge_html}"
+        f"</div>"
+        f'<div class="bento-value">{safe_value}</div>'
+        f'<div class="bento-subtitle">{safe_subtitle}</div>'
+        f"</div>"
+        f"{progress_html}"
+        f"</div>"
+    )
+    return card_html
+
+
+def render_kpi_card(
+    title: str,
+    value: str,
+    subtitle: str,
+    score_pct: Optional[float] = None,
+    badge_text: Optional[str] = None,
+    badge_type: str = "info",
+    icon: Optional[str] = None,
+) -> None:
+    """Hiển thị một thẻ Bento KPI Card riêng lẻ bằng render_html."""
+    html_card = render_bento_card(
+        title=title,
+        value=value,
+        subtitle=subtitle,
+        score_pct=score_pct,
+        badge_text=badge_text,
+        badge_type=badge_type,
+        icon=icon,
+    )
+    render_html(html_card)
 
 
 def render_bento_grid(cards: List[Any]) -> None:
-    """Hiển thị lưới Bento KPI Cards bằng HTML nhúng. Hỗ trợ cả danh sách chuỗi HTML hoặc dict tham số."""
-    cards_html = []
-    for item in cards:
-        if isinstance(item, str):
-            cards_html.append(item)
-        elif isinstance(item, dict):
-            cards_html.append(render_bento_card(**item))
-    all_cards = "".join(cards_html)
-    grid_html = f'<div class="bento-grid">{all_cards}</div>'
-    st.markdown(grid_html, unsafe_allow_html=True)
+    """Hiển thị lưới Bento KPI Cards bằng st.columns(4) và render_html riêng biệt cho từng cột."""
+    if not cards:
+        return
+    cols = st.columns(len(cards))
+    for col, item in zip(cols, cards):
+        with col:
+            if isinstance(item, str):
+                render_html(item)
+            elif isinstance(item, dict):
+                render_html(render_bento_card(**item))
 
 
 def render_telemetry_widget(telemetry: Any) -> None:
-    """Hiển thị widget giám sát LLMOps Telemetry ở Sidebar."""
+    """Hiển thị widget giám sát LLMOps Telemetry ở Sidebar theo bố cục Vertical StackRows trên nền sáng."""
     if not telemetry:
         return
     is_hit = getattr(telemetry, "cache_hit", False)
@@ -667,36 +755,42 @@ def render_telemetry_widget(telemetry: Any) -> None:
 
     safe_hash = html.escape(str(content_hash)[:16])
 
-    html_str = f"""
-    <div class="telemetry-card">
-        <div class="telemetry-status-badge {status_class}">
-            {status_text}
-        </div>
-        <div class="telemetry-metric-grid">
-            <div class="telemetry-cell">
-                <div class="telemetry-label">⏱️ Độ trễ (Latency)</div>
-                <div class="telemetry-val">{latency_str}</div>
-            </div>
-            <div class="telemetry-cell">
-                <div class="telemetry-label">🔄 Thử lại (Retries)</div>
-                <div class="telemetry-val">{retries}</div>
-            </div>
-        </div>
-        <div class="telemetry-label">🪙 Chi phí Ngữ cảnh (Tokens)</div>
-        <div class="telemetry-val" style="font-size: 12px; margin-bottom: 4px;">
-            {prompt_tokens:,} in / {completion_tokens:,} out <span style="color:#94a3b8;">({total_tokens:,} Tổng)</span>
-        </div>
-        <div class="telemetry-token-bar-wrap">
-            <div class="token-prompt-fill" style="width: {prompt_pct}%;" title="Prompt Tokens"></div>
-            <div class="token-completion-fill" style="width: {completion_pct}%;" title="Completion Tokens"></div>
-        </div>
-        <div style="margin-top: 8px;">
-            <div class="telemetry-label">🔑 SHA-256 Hash Khóa đệm:</div>
-            <div class="telemetry-hash">{safe_hash}...</div>
-        </div>
-    </div>
-    """
-    st.markdown(html_str, unsafe_allow_html=True)
+    html_str = f"""<div class="telemetry-card">
+<div class="telemetry-status-badge {status_class}">
+{status_text}
+</div>
+<div class="telemetry-stack">
+<div class="telemetry-row">
+<span class="telemetry-row-label">⏱️ Độ trễ (Latency)</span>
+<span class="telemetry-row-val">{latency_str}</span>
+</div>
+<div class="telemetry-row">
+<span class="telemetry-row-label">🔄 Thử lại (Retries)</span>
+<span class="telemetry-row-val">{retries} lần</span>
+</div>
+<div class="telemetry-row">
+<span class="telemetry-row-label">📥 Input Prompt</span>
+<span class="telemetry-row-val">{prompt_tokens:,} tok</span>
+</div>
+<div class="telemetry-row">
+<span class="telemetry-row-label">📤 Output Completion</span>
+<span class="telemetry-row-val">{completion_tokens:,} tok</span>
+</div>
+<div class="telemetry-row telemetry-row-total">
+<span class="telemetry-row-label">🪙 Tổng Tokens</span>
+<span class="telemetry-row-val">{total_tokens:,} tok</span>
+</div>
+</div>
+<div class="telemetry-token-bar-wrap">
+<div class="token-prompt-fill" style="width: {prompt_pct}%;" title="Prompt Tokens"></div>
+<div class="token-completion-fill" style="width: {completion_pct}%;" title="Completion Tokens"></div>
+</div>
+<div class="telemetry-hash-box">
+<span style="font-size: 11px; color: #64748b; font-weight: 600;">🔑 Khóa đệm SHA-256:</span>
+<span class="telemetry-hash-code">{safe_hash}...</span>
+</div>
+</div>"""
+    render_html(html_str)
 
 
 def render_user_story_card(
@@ -740,35 +834,35 @@ def render_user_story_card(
         given_val = html.escape(str(getattr(ac, "given", "")))
         when_val = html.escape(str(getattr(ac, "when", "")))
         then_val = html.escape(str(getattr(ac, "then", "")))
-        ac_items_html.append(f"""
-        <div class="gherkin-box">
-            <div style="font-weight: 600; margin-bottom: 6px; color: #475569;">Kịch bản #{idx}:</div>
-            <div class="gherkin-line">
-                <span class="gherkin-token token-given">GIVEN</span>
-                <span>{given_val}</span>
-            </div>
-            <div class="gherkin-line">
-                <span class="gherkin-token token-when">WHEN</span>
-                <span>{when_val}</span>
-            </div>
-            <div class="gherkin-line">
-                <span class="gherkin-token token-then">THEN</span>
-                <span>{then_val}</span>
-            </div>
-        </div>
-        """)
+        ac_items_html.append(
+            f'<div class="gherkin-box">'
+            f'<div style="font-weight: 600; margin-bottom: 6px; color: #475569;">Kịch bản #{idx}:</div>'
+            f'<div class="gherkin-line">'
+            f'<span class="gherkin-token token-given">GIVEN</span>'
+            f"<span>{given_val}</span>"
+            f"</div>"
+            f'<div class="gherkin-line">'
+            f'<span class="gherkin-token token-when">WHEN</span>'
+            f"<span>{when_val}</span>"
+            f"</div>"
+            f'<div class="gherkin-line">'
+            f'<span class="gherkin-token token-then">THEN</span>'
+            f"<span>{then_val}</span>"
+            f"</div>"
+            f"</div>"
+        )
 
     all_ac = "".join(ac_items_html)
 
-    card_html = f"""
-    <div class="story-card {prio_class}">
-        <div class="story-header">
-            <span class="story-req-id">📌 {req_id}</span>
-            <span class="bento-badge {prio_badge_type}">⭐ {safe_priority}</span>
-        </div>
-        <h4 class="story-title">{safe_title}</h4>
-        <div class="story-narrative">"{safe_user_story}"</div>
-        {all_ac}
-    </div>
-    """
-    st.markdown(card_html, unsafe_allow_html=True)
+    card_html = (
+        f'<div class="story-card {prio_class}">'
+        f'<div class="story-header">'
+        f'<span class="story-req-id">📌 {req_id}</span>'
+        f'<span class="bento-badge {prio_badge_type}">⭐ {safe_priority}</span>'
+        f"</div>"
+        f'<h4 class="story-title">{safe_title}</h4>'
+        f'<div class="story-narrative">"{safe_user_story}"</div>'
+        f"{all_ac}"
+        f"</div>"
+    )
+    render_html(card_html)
