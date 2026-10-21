@@ -11,8 +11,8 @@ from sqlglot.errors import ParseError, SqlglotError
 _CLEAN_ID_NON_ALPHANUM = re.compile(r"[^a-zA-Z0-9_]")
 _CLEAN_ID_UNDERSCORES = re.compile(r"_+")
 _ERD_COMMENT_MATCH = re.compile(r'([\'"])(.*?)\1\s*,?\s*$')
-_ERD_DATATYPE_SIZE = re.compile(r'([a-zA-Z0-9_]+)\s*\([^)]*\)')
-_ERD_TRAILING_COMMA = re.compile(r',\s*$')
+_ERD_DATATYPE_SIZE = re.compile(r"([a-zA-Z0-9_]+)\s*\([^)]*\)")
+_ERD_TRAILING_COMMA = re.compile(r",\s*$")
 _SEQ_PARTICIPANT_MATCH = re.compile(r"^(actor|participant)\s+(.*)$", re.IGNORECASE)
 _SEQ_AS_MATCH = re.compile(r"^(.*?)\s+as\s+(.*)$", re.IGNORECASE)
 _SEQ_ARROW_PATTERN = re.compile(r"(->>|-->>|->|-->|-x|--x|-\)|--\))")
@@ -46,24 +46,24 @@ def _clean_erd_attribute_line(line: str) -> str:
     comment_match = _ERD_COMMENT_MATCH.search(stripped)
     if comment_match:
         comment_text = comment_match.group(2)
-        before_comment = stripped[:comment_match.start(0)].rstrip()
+        before_comment = stripped[: comment_match.start(0)].rstrip()
         # Xóa kích thước kiểu dữ liệu trong ngoặc: varchar(150) -> varchar, decimal(10, 2) -> decimal
-        before_comment = _ERD_DATATYPE_SIZE.sub(r'\1', before_comment)
+        before_comment = _ERD_DATATYPE_SIZE.sub(r"\1", before_comment)
         # Xóa dấu phẩy phân tách giữa các trường
-        before_comment = before_comment.replace(',', ' ')
+        before_comment = before_comment.replace(",", " ")
         tokens = before_comment.split()
         cleaned_before = " ".join(tokens)
         return f'{indent}{cleaned_before} "{comment_text}"'
     else:
         # Không có chú thích
         # Xóa dấu phẩy ở cuối dòng
-        cleaned = _ERD_TRAILING_COMMA.sub('', stripped)
+        cleaned = _ERD_TRAILING_COMMA.sub("", stripped)
         # Xóa kích thước kiểu dữ liệu trong ngoặc: varchar(150) -> varchar, decimal(10, 2) -> decimal
-        cleaned = _ERD_DATATYPE_SIZE.sub(r'\1', cleaned)
-        cleaned = cleaned.replace(',', ' ')
+        cleaned = _ERD_DATATYPE_SIZE.sub(r"\1", cleaned)
+        cleaned = cleaned.replace(",", " ")
         tokens = cleaned.split()
         cleaned_attr = " ".join(tokens)
-        return f'{indent}{cleaned_attr}'
+        return f"{indent}{cleaned_attr}"
 
 
 def _clean_seq_participant_line(line: str) -> str:
@@ -87,7 +87,7 @@ def _clean_seq_participant_line(line: str) -> str:
         if " " in id_part or any(ord(c) > 127 for c in id_part):
             id_part = _slugify_to_id(id_part)
         else:
-            id_part = id_part.strip('\'"')
+            id_part = id_part.strip("'\"")
 
         # Đảm bảo tên hiển thị được bọc trong dấu ngoặc kép ""
         if (alias_part.startswith('"') and alias_part.endswith('"')) or (
@@ -104,7 +104,7 @@ def _clean_seq_participant_line(line: str) -> str:
         return line
 
     # Có khoảng trắng, tiếng Việt hoặc bọc ngoặc kép -> tạo ID và bọc tên hiển thị trong ngoặc kép
-    clean_display = rest.strip('\'"')
+    clean_display = rest.strip("'\"")
     clean_id = _slugify_to_id(clean_display)
     return f'{indent}{role} {clean_id} as "{clean_display}"'
 
@@ -208,8 +208,8 @@ def clean_and_validate_mermaid(code: str, diagram_type: str = "") -> str:
                 # Khối thực thể trên cùng 1 dòng
                 prefix, rest = line.split("{", 1)
                 body, suffix = rest.rsplit("}", 1)
-                cleaned_body = re.sub(r'([a-zA-Z0-9_]+)\s*\([^)]*\)', r'\1', body)
-                cleaned_body = re.sub(r',\s*$', '', cleaned_body.strip()).replace(',', ' ')
+                cleaned_body = re.sub(r"([a-zA-Z0-9_]+)\s*\([^)]*\)", r"\1", body)
+                cleaned_body = re.sub(r",\s*$", "", cleaned_body.strip()).replace(",", " ")
                 tokens = cleaned_body.split()
                 processed_lines.append(f"{prefix}{{ {' '.join(tokens)} }}{suffix}")
             elif "{" in stripped:

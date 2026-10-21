@@ -102,9 +102,7 @@ def evaluate_srs_deterministically(doc: SRSDocument) -> Dict[str, Any]:
 
     # 1. Kiểm tra Functional Requirements & User Stories
     if not functional_requirements:
-        lint_warnings.append(
-            "[SRS] Tài liệu chưa có bất kỳ Yêu cầu Chức năng (Functional Requirement) nào."
-        )
+        lint_warnings.append("[SRS] Tài liệu chưa có bất kỳ Yêu cầu Chức năng (Functional Requirement) nào.")
 
     for fr in functional_requirements:
         req_id = getattr(fr, "req_id", "FR-??")
@@ -121,10 +119,7 @@ def evaluate_srs_deterministically(doc: SRSDocument) -> Dict[str, Any]:
 
         # 1.2 Kiểm tra cấu trúc chuẩn của User Story
         if user_story:
-            is_valid_format = bool(
-                VN_USER_STORY_PATTERN.match(user_story)
-                or EN_USER_STORY_PATTERN.match(user_story)
-            )
+            is_valid_format = bool(VN_USER_STORY_PATTERN.match(user_story) or EN_USER_STORY_PATTERN.match(user_story))
             if not is_valid_format:
                 format_issue_count += 1
                 lint_warnings.append(
@@ -166,19 +161,13 @@ def evaluate_srs_deterministically(doc: SRSDocument) -> Dict[str, Any]:
                 # Kiểm tra rỗng
                 if not given:
                     bdd_empty_count += 1
-                    lint_warnings.append(
-                        f"[{req_id}] Tiêu chí chấp nhận #{ac_idx}: Mệnh đề 'Given' bị để trống."
-                    )
+                    lint_warnings.append(f"[{req_id}] Tiêu chí chấp nhận #{ac_idx}: Mệnh đề 'Given' bị để trống.")
                 if not when:
                     bdd_empty_count += 1
-                    lint_warnings.append(
-                        f"[{req_id}] Tiêu chí chấp nhận #{ac_idx}: Mệnh đề 'When' bị để trống."
-                    )
+                    lint_warnings.append(f"[{req_id}] Tiêu chí chấp nhận #{ac_idx}: Mệnh đề 'When' bị để trống.")
                 if not then:
                     bdd_empty_count += 1
-                    lint_warnings.append(
-                        f"[{req_id}] Tiêu chí chấp nhận #{ac_idx}: Mệnh đề 'Then' bị để trống."
-                    )
+                    lint_warnings.append(f"[{req_id}] Tiêu chí chấp nhận #{ac_idx}: Mệnh đề 'Then' bị để trống.")
                 elif len(then) < 15:
                     # Mệnh đề then phải đủ chi tiết >= 15 ký tự
                     bdd_short_then_count += 1
@@ -189,9 +178,7 @@ def evaluate_srs_deterministically(doc: SRSDocument) -> Dict[str, Any]:
 
     # 2. Kiểm tra Yêu cầu Phi chức năng (Non-Functional Requirements)
     if not non_functional_requirements:
-        lint_warnings.append(
-            "[SRS] Tài liệu chưa có bất kỳ Yêu cầu Phi chức năng (NFR) nào."
-        )
+        lint_warnings.append("[SRS] Tài liệu chưa có bất kỳ Yêu cầu Phi chức năng (NFR) nào.")
 
     for nfr in non_functional_requirements:
         category = getattr(nfr, "category", "NFR")
@@ -209,9 +196,7 @@ def evaluate_srs_deterministically(doc: SRSDocument) -> Dict[str, Any]:
 
     # 3. Kiểm tra tính toàn vẹn của Ma trận Truy vết (Requirements Traceability Matrix)
     fr_ids: List[str] = [
-        fr.req_id.strip()
-        for fr in functional_requirements
-        if getattr(fr, "req_id", None) and fr.req_id.strip()
+        fr.req_id.strip() for fr in functional_requirements if getattr(fr, "req_id", None) and fr.req_id.strip()
     ]
 
     rtm_ids: Set[str] = set()

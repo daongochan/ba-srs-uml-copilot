@@ -20,15 +20,13 @@ _ERD_FENCE_START = re.compile(r"^```(?:mermaid)?\s*\n?", re.IGNORECASE)
 _ERD_FENCE_END = re.compile(r"\n?```\s*$")
 _ERD_BLOCKS_REGEX = re.compile(r"^\s*([A-Za-z0-9_]+)\s*\{", re.MULTILINE)
 _ERD_STRIP_BODY_REGEX = re.compile(r"\{[^}]*\}")
-_ERD_REL_REGEX = re.compile(
-    r"^\s*([A-Za-z0-9_]+)\s+([\|\{\}o\.\-\<\>]+)\s+([A-Za-z0-9_]+)(?:\s*:\s*.*)?$"
-)
+_ERD_REL_REGEX = re.compile(r"^\s*([A-Za-z0-9_]+)\s+([\|\{\}o\.\-\<\>]+)\s+([A-Za-z0-9_]+)(?:\s*:\s*.*)?$")
 _ERD_SINGLE_IDENTIFIER = re.compile(r"^[A-Za-z0-9_]+$")
 
 
 def extract_ddl_tables(sql_code: str) -> Set[str]:
     """Trích xuất tập hợp tên các bảng vật lý được định nghĩa trong câu lệnh SQL DDL.
-    
+
     Chuẩn hóa tất cả tên bảng về chữ thường (lowercase) và loại bỏ quotes/schema prefixes.
     """
     if not sql_code or not sql_code.strip():
@@ -56,7 +54,9 @@ def extract_ddl_tables(sql_code: str) -> Set[str]:
                     table_expr = expr.this
                     if table_expr:
                         if isinstance(table_expr, exp.Schema):
-                            tbl_name = table_expr.this.name if hasattr(table_expr.this, "name") else str(table_expr.this)
+                            tbl_name = (
+                                table_expr.this.name if hasattr(table_expr.this, "name") else str(table_expr.this)
+                            )
                         elif hasattr(table_expr, "name"):
                             tbl_name = table_expr.name
                         else:
@@ -79,7 +79,7 @@ def extract_ddl_tables(sql_code: str) -> Set[str]:
 
 def extract_erd_entities(erd_mermaid: str) -> Set[str]:
     """Trích xuất tập hợp tên các thực thể từ sơ đồ Mermaid ERD.
-    
+
     Chuẩn hóa tên thực thể về chữ thường (lowercase) và loại bỏ hoàn toàn các thuộc tính bên trong { }.
     """
     if not erd_mermaid or not erd_mermaid.strip():
@@ -104,7 +104,12 @@ def extract_erd_entities(erd_mermaid: str) -> Set[str]:
     # 3. Trích xuất từ các dòng quan hệ: ENTITY_A ||--o{ ENTITY_B : label
     for line in erd_without_blocks.splitlines():
         line = line.strip()
-        if not line or line.startswith("%%") or line.lower().startswith("erdiagram") or line.lower().startswith("direction"):
+        if (
+            not line
+            or line.startswith("%%")
+            or line.lower().startswith("erdiagram")
+            or line.lower().startswith("direction")
+        ):
             continue
 
         match = _ERD_REL_REGEX.match(line)
@@ -129,10 +134,10 @@ def extract_erd_entities(erd_mermaid: str) -> Set[str]:
 def audit_cross_model_consistency(doc: SRSDocument) -> Dict[str, Any]:
     r"""Kiểm toán tính nhất quán liên mô hình giữa Ma trận RTM, Sơ đồ ERD và Kịch bản SQL DDL
     dựa trên lý thuyết Đại số Tập hợp (Set Operations).
-    
+
     Args:
         doc: Đối tượng SRSDocument chứa RTM, ERD, và SQL DDL.
-        
+
     Returns:
         dict: Chứa:
             - rtm_tables (List[str]): Danh sách bảng trong RTM.
@@ -174,11 +179,7 @@ def audit_cross_model_consistency(doc: SRSDocument) -> Dict[str, Any]:
     orphan_tables_in_ddl = sorted(list(ddl_tables_set - rtm_tables_set))
     missing_in_erd = sorted(list(ddl_tables_set - erd_entities_set))
 
-    is_fully_synced = (
-        len(phantom_tables_in_rtm) == 0
-        and len(orphan_tables_in_ddl) == 0
-        and len(missing_in_erd) == 0
-    )
+    is_fully_synced = len(phantom_tables_in_rtm) == 0 and len(orphan_tables_in_ddl) == 0 and len(missing_in_erd) == 0
 
     # 5. Tính điểm nhất quán (0 - 100%)
     all_distinct = rtm_tables_set | erd_entities_set | ddl_tables_set
@@ -194,7 +195,11 @@ def audit_cross_model_consistency(doc: SRSDocument) -> Dict[str, Any]:
         pairwise_rtm_ddl = rtm_tables_set & ddl_tables_set
         pairwise_erd_ddl = erd_entities_set & ddl_tables_set
         if not intersection and (pairwise_rtm_ddl or pairwise_erd_ddl):
-            partial_score = int(round(((len(pairwise_rtm_ddl) + len(pairwise_erd_ddl)) / (2 * len(ddl_tables_set or all_distinct))) * 100))
+            partial_score = int(
+                round(
+                    ((len(pairwise_rtm_ddl) + len(pairwise_erd_ddl)) / (2 * len(ddl_tables_set or all_distinct))) * 100
+                )
+            )
             consistency_score = max(raw_score, min(95, partial_score))
         else:
             consistency_score = raw_score
@@ -213,7 +218,7 @@ def audit_cross_model_consistency(doc: SRSDocument) -> Dict[str, Any]:
 
 def auto_sync_rtm_and_erd_with_ddl(doc: SRSDocument) -> SRSDocument:
     """Tự động đồng bộ hóa bảng giữa RTM và ERD theo nguồn chân lý (Source of Truth) là SQL DDL.
-    
+
     Quy tắc đồng bộ:
     1. Với RTM: Thay thế các bảng không tồn tại (phantom tables) bằng các bảng DDL chưa được gán (orphan tables).
        Nếu còn bảng DDL chưa được gán, tự động bổ sung vào ma trận RTM để đạt 100% độ phủ.
@@ -281,7 +286,7 @@ def auto_sync_rtm_and_erd_with_ddl(doc: SRSDocument) -> SRSDocument:
         for tbl in sorted(list(missing_erd)):
             entity_name = tbl.upper()
             append_lines.append(f"    {entity_name} {{")
-            append_lines.append("        int id PK \"Surrogate Primary Key\"")
+            append_lines.append('        int id PK "Surrogate Primary Key"')
             append_lines.append("    }")
         doc.er_diagram_mermaid = erd_text + "\n" + "\n".join(append_lines) + "\n"
 

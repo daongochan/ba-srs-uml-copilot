@@ -8,7 +8,6 @@ from typing import List, Dict, Any, Optional
 import streamlit as st
 
 
-
 def apply_custom_theme() -> None:
     """Nạp toàn bộ CSS Design Tokens và ghi đè giao diện Streamlit theo chuẩn Enterprise SaaS IDE."""
     custom_css = """
@@ -773,4 +772,3 @@ def render_user_story_card(
     </div>
     """
     st.markdown(card_html, unsafe_allow_html=True)
-

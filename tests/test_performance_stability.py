@@ -139,7 +139,9 @@ class TestGracefulDegradationAndRetry:
         mock_client_cls.return_value = mock_client
 
         with pytest.raises(RuntimeError) as exc_info:
-            generate_srs_with_telemetry("Valid meeting notes", "AIzaFakeKey123456789012345678901234567", force_refresh=True)
+            generate_srs_with_telemetry(
+                "Valid meeting notes", "AIzaFakeKey123456789012345678901234567", force_refresh=True
+            )
 
         err_text = str(exc_info.value)
         assert "Gợi ý: Dịch vụ Gemini API đang quá tải hoặc đạt giới hạn hạn ngạch" in err_text

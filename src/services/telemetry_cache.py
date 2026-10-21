@@ -32,7 +32,7 @@ _WHITESPACE_REGEX = re.compile(r"\s+")
 
 def compute_content_hash(raw_text: str, model_name: str = "gemini-3.8-flash") -> str:
     """Chuẩn hóa khoảng trắng và tính toán mã băm SHA-256 (64 ký tự hex) đại diện cho nội dung.
-    
+
     Đảm bảo 2 văn bản có nội dung ngữ nghĩa giống nhau (chỉ khác khoảng trắng thừa, tab, xuống dòng)
     sẽ sinh ra cùng một mã băm duy nhất (Idempotent Content-Addressable Key).
     """
@@ -44,7 +44,7 @@ def compute_content_hash(raw_text: str, model_name: str = "gemini-3.8-flash") ->
 
 class DeterministicSRSCache:
     """Bộ nhớ đệm trong RAM (In-Memory Cache) lưu trữ các tài liệu SRS dựa trên mã băm nội dung SHA-256.
-    
+
     Tích hợp cơ chế giải phóng bộ nhớ LRU (Least Recently Used) và TTL (Time-To-Live)
     để ngăn ngừa rò rỉ bộ nhớ (Memory Leak) và cung cấp thời gian truy xuất O(1).
     """
@@ -109,18 +109,18 @@ def execute_with_exponential_backoff(
     base_delay: float = 1.0,
 ) -> Tuple[Any, int]:
     """Thực thi hàm với cơ chế tự phục hồi Exponential Backoff Retry kèm Jitter khi gặp lỗi mạng/rate-limit.
-    
+
     Quy tắc xử lý lỗi:
     - Thử lại khi gặp các lỗi tạm thời: HTTP 429 (Rate Limit), 500 (Internal Server Error),
       503 (Service Unavailable), Resource Exhausted, Timeout.
     - Dừng ngay lập tức (Fail-fast) khi gặp lỗi phía client hoặc xác thực: 400 (Bad Request),
       401 (Unauthorized / Invalid API Key), 403 (Forbidden), 404 (Not Found).
-      
+
     Args:
         func: Hàm cần thực thi (không nhận tham số).
         max_retries: Số lần thử lại tối đa.
         base_delay: Thời gian chờ cơ sở tính bằng giây.
-        
+
     Returns:
         Tuple[Any, int]: Kết quả của hàm và số lần đã thử lại (retry_attempts).
     """
@@ -154,4 +154,3 @@ def execute_with_exponential_backoff(
             jitter = random.uniform(0.05, 0.25)
             delay = (base_delay * (2 ** (attempts - 1))) + jitter
             time.sleep(delay)
-

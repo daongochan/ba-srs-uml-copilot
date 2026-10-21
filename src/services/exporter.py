@@ -49,82 +49,98 @@ def generate_markdown_report(doc: SRSDocument) -> str:
     lines.append("")
 
     seq_diag = getattr(doc, "sequence_diagram_mermaid", "")
-    lines.extend([
-        "## 5. Sơ đồ Tuần tự Nghiệp vụ Trọng tâm (UML Sequence Diagram)",
-        "",
-        "```mermaid",
-        seq_diag.strip() if seq_diag else "",
-        "```",
-        "",
-    ])
+    lines.extend(
+        [
+            "## 5. Sơ đồ Tuần tự Nghiệp vụ Trọng tâm (UML Sequence Diagram)",
+            "",
+            "```mermaid",
+            seq_diag.strip() if seq_diag else "",
+            "```",
+            "",
+        ]
+    )
 
     state_diagram = getattr(doc, "state_diagram_mermaid", "")
     state_entity = getattr(doc, "state_machine_entity", "")
     if state_diagram:
         entity_title = f" - {state_entity}" if state_entity else ""
-        lines.extend([
-            f"## 5.1. Sơ đồ Máy Trạng thái Thực thể Cốt lõi (UML State Machine Diagram){entity_title}",
-            "",
-            "```mermaid",
-            state_diagram.strip(),
-            "```",
-            "",
-        ])
+        lines.extend(
+            [
+                f"## 5.1. Sơ đồ Máy Trạng thái Thực thể Cốt lõi (UML State Machine Diagram){entity_title}",
+                "",
+                "```mermaid",
+                state_diagram.strip(),
+                "```",
+                "",
+            ]
+        )
 
     er_diag = getattr(doc, "er_diagram_mermaid", "")
     sql_script = getattr(doc, "sql_ddl_script", "")
-    lines.extend([
-        "## 6. Sơ đồ Thực thể Quan hệ Chuẩn 3NF (Mermaid ERD)",
-        "",
-        "```mermaid",
-        er_diag.strip() if er_diag else "",
-        "```",
-        "",
-        "## 7. Kịch bản Khởi tạo Cơ sở Dữ liệu (SQL DDL Script - PostgreSQL)",
-        "",
-        "```sql",
-        sql_script.strip() if sql_script else "",
-        "```",
-        "",
-    ])
+    lines.extend(
+        [
+            "## 6. Sơ đồ Thực thể Quan hệ Chuẩn 3NF (Mermaid ERD)",
+            "",
+            "```mermaid",
+            er_diag.strip() if er_diag else "",
+            "```",
+            "",
+            "## 7. Kịch bản Khởi tạo Cơ sở Dữ liệu (SQL DDL Script - PostgreSQL)",
+            "",
+            "```sql",
+            sql_script.strip() if sql_script else "",
+            "```",
+            "",
+        ]
+    )
 
     traceability_matrix = getattr(doc, "traceability_matrix", [])
     if traceability_matrix:
-        lines.extend([
-            "## 8. Ma trận Truy vết Yêu cầu (Requirements Traceability Matrix - RTM)",
-            "",
-            "| Mã YC | Tên Tính năng | Quy tắc Nghiệp vụ (Business Rule) | Bảng CSDL Liên quan | Kịch bản Kiểm thử Nghiệm thu |",
-            "| :--- | :--- | :--- | :--- | :--- |",
-        ])
+        lines.extend(
+            [
+                "## 8. Ma trận Truy vết Yêu cầu (Requirements Traceability Matrix - RTM)",
+                "",
+                "| Mã YC | Tên Tính năng | Quy tắc Nghiệp vụ (Business Rule) | Bảng CSDL Liên quan | Kịch bản Kiểm thử Nghiệm thu |",
+                "| :--- | :--- | :--- | :--- | :--- |",
+            ]
+        )
         for item in traceability_matrix:
             related = (
                 ", ".join(item.related_tables)
                 if isinstance(item.related_tables, list)
                 else str(item.related_tables or "")
             )
-            lines.append(f"| **{item.req_id}** | {item.feature_name} | {item.business_rule} | `{related}` | {item.test_scenario_summary} |")
+            lines.append(
+                f"| **{item.req_id}** | {item.feature_name} | {item.business_rule} | `{related}` | {item.test_scenario_summary} |"
+            )
         lines.append("")
 
     quality_audit = getattr(doc, "quality_audit", None)
     if quality_audit:
-        lines.extend([
-            "## 9. Đánh giá Chất lượng Đặc tả & Điểm Cần Phỏng vấn Lại (Quality & Ambiguity Audit)",
-            "",
-            f"- **Điểm Tuân thủ IEEE 29148:** `{getattr(quality_audit, 'ieee_compliance_score', 90)}/100`",
-            f"- **Điểm Chuẩn User Story INVEST:** `{getattr(quality_audit, 'invest_score', 90)}/100`",
-            "",
-        ])
+        lines.extend(
+            [
+                "## 9. Đánh giá Chất lượng Đặc tả & Điểm Cần Phỏng vấn Lại (Quality & Ambiguity Audit)",
+                "",
+                f"- **Điểm Tuân thủ IEEE 29148:** `{getattr(quality_audit, 'ieee_compliance_score', 90)}/100`",
+                f"- **Điểm Chuẩn User Story INVEST:** `{getattr(quality_audit, 'invest_score', 90)}/100`",
+                "",
+            ]
+        )
         if getattr(quality_audit, "third_nf_justification", ""):
-            lines.extend([
-                "### Giải trình Thiết kế CSDL Đạt Chuẩn 3NF (3NF Justification):",
-                f"{quality_audit.third_nf_justification}",
-                "",
-            ])
+            lines.extend(
+                [
+                    "### Giải trình Thiết kế CSDL Đạt Chuẩn 3NF (3NF Justification):",
+                    f"{quality_audit.third_nf_justification}",
+                    "",
+                ]
+            )
         if getattr(quality_audit, "clarification_questions", []):
-            lines.extend([
-                "### Câu hỏi Đào sâu Nghiệp vụ Cần Xác nhận lại với Stakeholders (Follow-up Questions):",
-                "",
-            ])
+            lines.extend(
+                [
+                    "### Câu hỏi Đào sâu Nghiệp vụ Cần Xác nhận lại với Stakeholders (Follow-up Questions):",
+                    "",
+                ]
+            )
             for q_idx, q in enumerate(quality_audit.clarification_questions, start=1):
                 lines.append(f"{q_idx}. {q}")
             lines.append("")
@@ -138,28 +154,30 @@ def generate_rtm_csv_bytes(doc: SRSDocument) -> bytes:
     writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
 
     # Header chuẩn BABOK v3
-    writer.writerow([
-        "Mã YC",
-        "Tên Tính năng",
-        "Quy tắc Nghiệp vụ",
-        "Bảng CSDL Liên quan",
-        "Kịch bản Kiểm thử Nghiệm thu",
-    ])
+    writer.writerow(
+        [
+            "Mã YC",
+            "Tên Tính năng",
+            "Quy tắc Nghiệp vụ",
+            "Bảng CSDL Liên quan",
+            "Kịch bản Kiểm thử Nghiệm thu",
+        ]
+    )
 
     traceability_matrix = getattr(doc, "traceability_matrix", []) or []
     for item in traceability_matrix:
         related = (
-            ", ".join(item.related_tables)
-            if isinstance(item.related_tables, list)
-            else str(item.related_tables or "")
+            ", ".join(item.related_tables) if isinstance(item.related_tables, list) else str(item.related_tables or "")
         )
-        writer.writerow([
-            item.req_id,
-            item.feature_name,
-            item.business_rule,
-            related,
-            item.test_scenario_summary,
-        ])
+        writer.writerow(
+            [
+                item.req_id,
+                item.feature_name,
+                item.business_rule,
+                related,
+                item.test_scenario_summary,
+            ]
+        )
 
     return output.getvalue().encode("utf-8-sig")
 

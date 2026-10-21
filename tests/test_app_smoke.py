@@ -163,5 +163,3 @@ def test_app_meeting_notes_input_has_max_chars_guardrail():
     at.run()
     assert len(at.text_area) >= 1
     assert at.text_area[0].proto.max_chars == 50000
-
-

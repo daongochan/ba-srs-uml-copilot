@@ -15,26 +15,26 @@ _DANGEROUS_SQL_PATTERN = re.compile(
 
 # Pre-compiled regexes cho chuẩn hóa cú pháp SQLite DDL
 _DEFAULT_UUID_REGEX = re.compile(
-    r'DEFAULT\s+\(?\s*(?:uuid_generate_v4|gen_random_uuid)\s*\(\s*\)\s*\)?',
+    r"DEFAULT\s+\(?\s*(?:uuid_generate_v4|gen_random_uuid)\s*\(\s*\)\s*\)?",
     re.IGNORECASE,
 )
 _DEFAULT_NOW_REGEX = re.compile(
-    r'DEFAULT\s+\(?\s*now\s*\(\s*\)\s*\)?',
+    r"DEFAULT\s+\(?\s*now\s*\(\s*\)\s*\)?",
     re.IGNORECASE,
 )
 _NULLS_ORDER_REGEX = re.compile(
-    r'\bNULLS\s+(?:LAST|FIRST)\b',
+    r"\bNULLS\s+(?:LAST|FIRST)\b",
     re.IGNORECASE,
 )
 _CONCURRENTLY_REGEX = re.compile(
-    r'\bCONCURRENTLY\b',
+    r"\bCONCURRENTLY\b",
     re.IGNORECASE,
 )
 _USING_INDEX_REGEX = re.compile(
-    r'\bUSING\s+(?:BTREE|HASH|GIN|GIST)\b',
+    r"\bUSING\s+(?:BTREE|HASH|GIN|GIST)\b",
     re.IGNORECASE,
 )
-_TRAILING_COMMA_REGEX = re.compile(r',\s*\)')
+_TRAILING_COMMA_REGEX = re.compile(r",\s*\)")
 _MARKDOWN_FENCE_START_REGEX = re.compile(r"^```(?:sql)?\s*\n?", re.IGNORECASE)
 _MARKDOWN_FENCE_END_REGEX = re.compile(r"\n?```\s*$")
 
@@ -45,22 +45,21 @@ def _sanitize_ddl_for_sqlite(sql_ddl: str) -> str:
     sanitized = sql_ddl
 
     # 1. Loại bỏ các hàm DEFAULT đặc thù không được hỗ trợ trong SQLite
-    sanitized = _DEFAULT_UUID_REGEX.sub('', sanitized)
+    sanitized = _DEFAULT_UUID_REGEX.sub("", sanitized)
 
     # 2. Chuẩn hóa now() sang CURRENT_TIMESTAMP
-    sanitized = _DEFAULT_NOW_REGEX.sub('DEFAULT CURRENT_TIMESTAMP', sanitized)
+    sanitized = _DEFAULT_NOW_REGEX.sub("DEFAULT CURRENT_TIMESTAMP", sanitized)
 
     # 3. Loại bỏ NULLS LAST và NULLS FIRST trong định nghĩa chỉ mục
-    sanitized = _NULLS_ORDER_REGEX.sub('', sanitized)
+    sanitized = _NULLS_ORDER_REGEX.sub("", sanitized)
 
     # 4. Loại bỏ các mệnh đề chỉ mục đặc thù Postgres như USING (BTREE|HASH|GIN|GIST) hoặc CONCURRENTLY
-    sanitized = _CONCURRENTLY_REGEX.sub('', sanitized)
-    sanitized = _USING_INDEX_REGEX.sub('', sanitized)
+    sanitized = _CONCURRENTLY_REGEX.sub("", sanitized)
+    sanitized = _USING_INDEX_REGEX.sub("", sanitized)
 
     # 5. Dọn dẹp dấu phẩy thừa trước dấu đóng ngoặc
-    sanitized = _TRAILING_COMMA_REGEX.sub(')', sanitized)
+    sanitized = _TRAILING_COMMA_REGEX.sub(")", sanitized)
     return sanitized.strip()
-
 
 
 def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
@@ -112,14 +111,15 @@ def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
 
     if _DANGEROUS_SQL_PATTERN.search(sql_code):
         res = default_failure.copy()
-        res["error_message"] = "Phát hiện câu lệnh hoặc từ khóa nguy hiểm bị cấm trong SQLite Sandbox (ATTACH/DETACH/VACUUM INTO/load_extension)."
+        res["error_message"] = (
+            "Phát hiện câu lệnh hoặc từ khóa nguy hiểm bị cấm trong SQLite Sandbox (ATTACH/DETACH/VACUUM INTO/load_extension)."
+        )
         return res
 
     # Loại bỏ markdown fences
     cleaned_sql = sql_code.strip()
     cleaned_sql = _MARKDOWN_FENCE_START_REGEX.sub("", cleaned_sql).strip()
     cleaned_sql = _MARKDOWN_FENCE_END_REGEX.sub("", cleaned_sql).strip()
-
 
     if not cleaned_sql:
         res = default_failure.copy()
@@ -182,7 +182,9 @@ def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
 
     if len(table_statements) + len(index_statements) > MAX_SQL_STATEMENTS:
         res = default_failure.copy()
-        res["error_message"] = f"Số lượng câu lệnh SQL DDL vượt quá giới hạn an toàn (tối đa {MAX_SQL_STATEMENTS} câu lệnh)."
+        res["error_message"] = (
+            f"Số lượng câu lệnh SQL DDL vượt quá giới hạn an toàn (tối đa {MAX_SQL_STATEMENTS} câu lệnh)."
+        )
         return res
 
     # 2. Thực thi trong SQLite in-memory sandbox
@@ -293,23 +295,27 @@ def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
                     dedup_key = (tbl, from_col)
                     if dedup_key not in seen_unindexed_keys:
                         seen_unindexed_keys.add(dedup_key)
-                        unindexed_foreign_keys.append({
-                            "table": tbl,
-                            "fk_column": from_col,
-                            "referenced_table": fk["target_table"],
-                            "suggested_ddl": f"CREATE INDEX IF NOT EXISTS idx_{tbl}_{from_col} ON {tbl} ({from_col});",
-                        })
+                        unindexed_foreign_keys.append(
+                            {
+                                "table": tbl,
+                                "fk_column": from_col,
+                                "referenced_table": fk["target_table"],
+                                "suggested_ddl": f"CREATE INDEX IF NOT EXISTS idx_{tbl}_{from_col} ON {tbl} ({from_col});",
+                            }
+                        )
 
-            tables_metadata.append({
-                "table_name": tbl,
-                "has_primary_key": has_primary_key,
-                "column_count": len(columns),
-                "columns": columns,
-                "foreign_key_count": len(foreign_keys),
-                "foreign_keys": foreign_keys,
-                "referenced_tables": referenced_tables,
-                "leftmost_indexed_columns": sorted(list(leftmost_indexed_cols)),
-            })
+            tables_metadata.append(
+                {
+                    "table_name": tbl,
+                    "has_primary_key": has_primary_key,
+                    "column_count": len(columns),
+                    "columns": columns,
+                    "foreign_key_count": len(foreign_keys),
+                    "foreign_keys": foreign_keys,
+                    "referenced_tables": referenced_tables,
+                    "leftmost_indexed_columns": sorted(list(leftmost_indexed_cols)),
+                }
+            )
 
         # Tổng số Index vật lý hiện có (không tính auto-indexes nội bộ của SQLite)
         cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%';")

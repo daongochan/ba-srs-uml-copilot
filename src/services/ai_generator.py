@@ -2,7 +2,7 @@
 
 import json
 import time
-from typing import Tuple
+from typing import Any, Tuple
 from google import genai
 from google.genai import types
 
@@ -148,7 +148,7 @@ Hãy phân tích nghiệp vụ, chuẩn hóa theo IEEE 29148 & BABOK, thiết k�
 
     start_time = time.perf_counter()
 
-    def _call_gemini():
+    def _call_gemini() -> Any:
         return client.models.generate_content(
             model=model_name,
             contents=user_prompt,
@@ -161,9 +161,7 @@ Hãy phân tích nghiệp vụ, chuẩn hóa theo IEEE 29148 & BABOK, thiết k�
         )
 
     try:
-        response, retry_attempts = execute_with_exponential_backoff(
-            _call_gemini, max_retries=3, base_delay=1.0
-        )
+        response, retry_attempts = execute_with_exponential_backoff(_call_gemini, max_retries=3, base_delay=1.0)
     except Exception as e:
         safe_msg = sanitize_error_message(e, api_key=api_key)
         err_upper = str(e).upper()
@@ -202,9 +200,7 @@ Hãy phân tích nghiệp vụ, chuẩn hóa theo IEEE 29148 & BABOK, thiết k�
         pass
 
     try:
-        doc.er_diagram_mermaid = clean_and_validate_mermaid(
-            doc.er_diagram_mermaid, diagram_type="erDiagram"
-        )
+        doc.er_diagram_mermaid = clean_and_validate_mermaid(doc.er_diagram_mermaid, diagram_type="erDiagram")
     except Exception:
         pass
 

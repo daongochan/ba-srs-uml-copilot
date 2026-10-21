@@ -106,6 +106,7 @@ def test_generate_srs_with_telemetry_cache_hit():
     )
 
     from src.services.telemetry_cache import compute_content_hash
+
     notes = "Notes for testing cache hit behavior..."
     c_hash = compute_content_hash(notes, model_name="gemini-3.8-flash")
     default_srs_cache.set(c_hash, doc, telemetry)

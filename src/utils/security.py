@@ -17,11 +17,11 @@ _URL_KEY_PARAM_REGEX = re.compile(r"([?&](?:key|api_key|token|auth)=)[^&\s'\"]+"
 
 def sanitize_error_message(error: Any, api_key: Optional[str] = None) -> str:
     """Loại bỏ thông tin nhạy cảm (API Keys, Token bí mật, URL params) khỏi thông báo lỗi.
-    
+
     Args:
         error: Đối tượng Exception hoặc chuỗi thông báo lỗi.
         api_key: Khóa API hiện tại cần đảm bảo loại bỏ triệt để nếu xuất hiện.
-        
+
     Returns:
         str: Chuỗi thông báo lỗi an toàn để hiển thị trên giao diện hoặc ghi log.
     """
