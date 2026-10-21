@@ -584,11 +584,11 @@ if doc:
         # Báo cáo Kiểm toán Thực thi Vật lý CSDL (In-Memory DB Sandbox Audit)
         st.divider()
         st.markdown("#### 🧪 Báo cáo Kiểm toán Thực thi Vật lý CSDL (In-Memory DB Sandbox Audit)")
-        st.caption("Khởi tạo và chạy thực tế toàn bộ câu lệnh DDL trên SQLite RAM Sandbox (:memory:) để kiểm tra tính khả thi vật lý và tính toàn vẹn khóa ngoại.")
+        st.caption("Khởi tạo và chạy thực tế toàn bộ câu lệnh DDL trên SQLite RAM Sandbox (:memory:) để kiểm tra tính khả thi vật lý, cấu trúc khóa chính, toàn vẹn khóa ngoại và tối ưu hóa chỉ mục B-Tree.")
 
         db_audit = execute_and_audit_ddl(doc.sql_ddl_script)
 
-        audit_col1, audit_col2, audit_col3 = st.columns(3)
+        audit_col1, audit_col2, audit_col3, audit_col4 = st.columns(4)
         with audit_col1:
             if db_audit["execution_success"]:
                 st.metric("⚙️ Khởi tạo Bảng trong RAM", "PASS (100%)", delta="Khả thi vật lý")
@@ -596,25 +596,103 @@ if doc:
                 st.metric("⚙️ Khởi tạo Bảng trong RAM", "FAIL", delta="Lỗi cú pháp DDL", delta_color="inverse")
 
         with audit_col2:
-            st.metric("🗄️ Tổng số Bảng Vật lý", f"{db_audit['table_count']} Bảng", delta="Đã tạo thực tế")
+            st.metric(
+                "🗄️ Bảng & Chỉ mục",
+                f"{db_audit['table_count']} Bảng / {db_audit.get('total_indexes_created', 0)} Indexes",
+                delta="Cấu trúc vật lý",
+            )
 
         with audit_col3:
-            st.metric("🔑 Ràng buộc Khóa ngoại (FK)", f"{db_audit['total_foreign_keys']} Khóa ngoại", delta="Quan hệ toàn vẹn")
+            st.metric(
+                "🔑 Ràng buộc Khóa ngoại (FK)",
+                f"{db_audit['total_foreign_keys']} Khóa ngoại",
+                delta="Toàn vẹn tham chiếu",
+            )
+
+        with audit_col4:
+            health_score = db_audit.get("performance_health_score", 100)
+            score_delta = "Tối ưu hóa B-Tree" if health_score == 100 else ("Cần tối ưu Index" if health_score >= 80 else "Nguy cơ Full Scan")
+            delta_color = "normal" if health_score >= 90 else ("off" if health_score >= 80 else "inverse")
+            st.metric(
+                "⚡ Điểm Hiệu năng B-Tree",
+                f"{health_score}/100",
+                delta=score_delta,
+                delta_color=delta_color,
+            )
 
         if not db_audit["execution_success"]:
             st.error(f"❌ Chi tiết sự cố thực thi Sandbox: {db_audit.get('error_message')}")
-        elif db_audit["tables_metadata"]:
-            tables_summary = [
-                {
-                    "Tên Bảng": meta["table_name"],
-                    "Số Cột": meta["column_count"],
-                    "Số Khóa Ngoại": meta["foreign_key_count"],
-                    "Bảng Cha Tham Chiếu": ", ".join(meta["referenced_tables"]) if meta["referenced_tables"] else "(Không có)",
-                    "Danh Sách Cột (Chi tiết)": ", ".join([f"{c['name']} ({c['type']}{' PK' if c['primary_key'] else ''})" for c in meta["columns"]]),
-                }
-                for meta in db_audit["tables_metadata"]
-            ]
-            st.dataframe(tables_summary, use_container_width=True, hide_index=True)
+        else:
+            # 1. Cảnh báo Bảng thiếu Primary Key nếu có
+            tables_no_pk = db_audit.get("tables_without_pk", [])
+            if tables_no_pk:
+                st.error(f"🚨 **Phát hiện {len(tables_no_pk)} bảng thiếu Khóa chính (Primary Key):** {', '.join(tables_no_pk)}. Việc thiếu PK vi phạm tính toàn vẹn thực thể 1NF/3NF!")
+
+            # 2. Xử lý Khóa ngoại chưa đánh chỉ mục (Unindexed Foreign Keys)
+            unindexed_fks = db_audit.get("unindexed_foreign_keys", [])
+            recommended_script = db_audit.get("recommended_index_script", "")
+
+            if unindexed_fks:
+                st.warning(
+                    f"⚠️ **Cảnh báo Hiệu năng B-Tree Index:** Phát hiện **{len(unindexed_fks)} khóa ngoại (FK)** chưa được đánh chỉ mục theo nguyên lý *Leftmost Prefix*. "
+                    "Điều này sẽ dẫn đến quét toàn bảng (**Full Table Scan**) khi thực hiện `JOIN` hoặc `ON DELETE CASCADE` trên bảng lớn trong môi trường Production."
+                )
+
+                # Hiển thị bảng chi tiết các FK thiếu index
+                unindexed_table = [
+                    {
+                        "Bảng Chứa FK": item["table"],
+                        "Cột Khóa Ngoại": item["fk_column"],
+                        "Bảng Tham Chiếu (Parent)": item["referenced_table"],
+                        "Câu lệnh Đề xuất Vá Index": item["suggested_ddl"],
+                    }
+                    for item in unindexed_fks
+                ]
+                st.dataframe(unindexed_table, use_container_width=True, hide_index=True)
+
+                with st.expander("📄 Xem mã nguồn đề xuất bù đắp B-Tree Index (Recommended Index Script)", expanded=True):
+                    st.code(recommended_script, language="sql")
+
+                # Nút tự động chèn index
+                if st.button("⚡ Tự động Chèn B-Tree Index Tối ưu vào Kịch bản SQL (Auto-Inject Missing Indexes)", type="primary", key="btn_auto_inject_indexes"):
+                    doc.sql_ddl_script = (
+                        doc.sql_ddl_script.rstrip()
+                        + "\n\n-- =========================================================\n"
+                        + "-- AUTO-INJECTED B-TREE INDEXES FOR FOREIGN KEY OPTIMIZATION\n"
+                        + "-- =========================================================\n"
+                        + recommended_script
+                        + "\n"
+                    )
+                    st.session_state["srs_result"] = doc
+                    if "live_workbench_sql" in st.session_state:
+                        st.session_state["live_workbench_sql"] = doc.sql_ddl_script
+                    st.toast("🚀 Đã tự động chèn chỉ mục B-Tree vào kịch bản SQL và tối ưu hóa 100%!", icon="✅")
+                    st.rerun()
+
+            elif not tables_no_pk:
+                st.success("🎉 **Hoàn hảo:** Tất cả Khóa chính và Khóa ngoại đều đã được bảo vệ bởi chỉ mục B-Tree (100% Leftmost Prefix Coverage)!")
+
+            # 3. Hiển thị bảng chi tiết cấu trúc các bảng
+            if db_audit["tables_metadata"]:
+                st.markdown("##### 📋 Chi tiết Cấu trúc Từng Bảng Vật lý")
+                tables_summary = [
+                    {
+                        "Tên Bảng": meta["table_name"],
+                        "Có PK?": "✅ Có PK" if meta.get("has_primary_key", True) else "❌ Thiếu PK",
+                        "Số Cột": meta["column_count"],
+                        "Số Khóa Ngoại": meta["foreign_key_count"],
+                        "Cột Đã Đánh Index (Leftmost)": ", ".join(meta.get("leftmost_indexed_columns", [])) if meta.get("leftmost_indexed_columns") else "(Chưa có)",
+                        "Bảng Cha Tham Chiếu": ", ".join(meta["referenced_tables"]) if meta["referenced_tables"] else "(Không có)",
+                        "Danh Sách Cột (Chi tiết)": ", ".join([f"{c['name']} ({c['type']}{' PK' if c['primary_key'] else ''})" for c in meta["columns"]]),
+                    }
+                    for meta in db_audit["tables_metadata"]
+                ]
+                st.dataframe(tables_summary, use_container_width=True, hide_index=True)
+
+            if db_audit.get("warnings"):
+                with st.expander("ℹ️ Cảnh báo chuyển đổi chỉ mục (Index Warnings)", expanded=False):
+                    for w in db_audit["warnings"]:
+                        st.caption(f"⚠️ {w}")
 
     # ---------------- TAB 4: ENTERPRISE EXPORT BUNDLE ----------------
     with tab4:

@@ -56,8 +56,9 @@ def _sanitize_ddl_for_sqlite(sql_ddl: str) -> str:
 
 def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
     """Thực thi đoạn mã SQL DDL trong cơ sở dữ liệu SQLite in-memory (:memory:)
-    với quy trình phân tách độc lập giữa CREATE TABLE và CREATE INDEX nhằm đảm bảo
-    kiểm toán chính xác số bảng và khóa ngoại ngay cả khi có chỉ mục Postgres đặc thù.
+    và thực hiện kiểm toán vật lý chuyên sâu: B-Tree Leftmost-Prefix Indexing,
+    kiểm tra Khóa chính (Primary Key), phát hiện Khóa ngoại chưa đánh chỉ mục (Unindexed FKs)
+    và tự động sinh kịch bản index khắc phục.
 
     Args:
         sql_code: Chuỗi câu lệnh SQL DDL (hỗ trợ cả markdown fence).
@@ -67,19 +68,33 @@ def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
             - execution_success (bool): Kết quả khởi tạo các bảng thành công.
             - table_count (int): Số lượng bảng vật lý được tạo thành công.
             - total_foreign_keys (int): Tổng số ràng buộc khóa ngoại được thiết lập.
+            - total_indexes_created (int): Tổng số Index vật lý hiện có trong schema.
             - tables_metadata (List[dict]): Danh sách thông tin chi tiết từng bảng.
+            - tables_without_pk (List[str]): Danh sách tên các bảng bị thiếu Primary Key.
+            - unindexed_foreign_keys (List[dict]): Danh sách các khóa ngoại thiếu B-Tree index.
+            - recommended_index_script (str): Chuỗi các lệnh CREATE INDEX được đề xuất.
+            - performance_health_score (int): Điểm sức khỏe hiệu năng CSDL (0-100).
             - warnings (List[str]): Cảnh báo chỉ mục nếu có câu lệnh index không tương thích.
             - error_message (str | None): Thông báo lỗi nếu thất bại khi tạo bảng.
     """
+    default_failure: Dict[str, Any] = {
+        "execution_success": False,
+        "table_count": 0,
+        "total_foreign_keys": 0,
+        "total_indexes_created": 0,
+        "tables_metadata": [],
+        "tables_without_pk": [],
+        "unindexed_foreign_keys": [],
+        "recommended_index_script": "",
+        "performance_health_score": 0,
+        "warnings": [],
+        "error_message": None,
+    }
+
     if not sql_code or not sql_code.strip():
-        return {
-            "execution_success": False,
-            "table_count": 0,
-            "total_foreign_keys": 0,
-            "tables_metadata": [],
-            "warnings": [],
-            "error_message": "Đoạn mã SQL trống.",
-        }
+        res = default_failure.copy()
+        res["error_message"] = "Đoạn mã SQL trống."
+        return res
 
     # Loại bỏ markdown fences
     cleaned_sql = sql_code.strip()
@@ -87,14 +102,9 @@ def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
     cleaned_sql = re.sub(r"\n?```\s*$", "", cleaned_sql).strip()
 
     if not cleaned_sql:
-        return {
-            "execution_success": False,
-            "table_count": 0,
-            "total_foreign_keys": 0,
-            "tables_metadata": [],
-            "warnings": [],
-            "error_message": "Đoạn mã SQL trống sau khi làm sạch markdown.",
-        }
+        res = default_failure.copy()
+        res["error_message"] = "Đoạn mã SQL trống sau khi làm sạch markdown."
+        return res
 
     # 1. Phân tách câu lệnh CREATE TABLE và CREATE INDEX
     table_statements: List[str] = []
@@ -146,14 +156,9 @@ def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
                 index_statements.append(sanitized)
 
     if not table_statements:
-        return {
-            "execution_success": False,
-            "table_count": 0,
-            "total_foreign_keys": 0,
-            "tables_metadata": [],
-            "warnings": [],
-            "error_message": "Không tìm thấy câu lệnh CREATE TABLE hợp lệ nào để thực thi.",
-        }
+        res = default_failure.copy()
+        res["error_message"] = "Không tìm thấy câu lệnh CREATE TABLE hợp lệ nào để thực thi."
+        return res
 
     # 2. Thực thi trong SQLite in-memory sandbox
     conn = None
@@ -165,22 +170,30 @@ def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
         for stmt in table_statements:
             cursor.execute(stmt)
 
-        # Trích xuất danh sách bảng vật lý đã khởi tạo thành công
+        # BƯỚC B: Thực thi các câu lệnh CREATE INDEX trong khối try...except riêng biệt
+        index_warnings: List[str] = []
+        for idx_stmt in index_statements:
+            try:
+                cursor.execute(idx_stmt)
+            except Exception as idx_err:
+                index_warnings.append(f"Chỉ mục '{idx_stmt[:50]}...': {str(idx_err)}")
+
+        # 3. Trích xuất danh sách bảng vật lý đã khởi tạo thành công
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
         tables = [row[0] for row in cursor.fetchall()]
 
         if not tables:
-            return {
-                "execution_success": False,
-                "table_count": 0,
-                "total_foreign_keys": 0,
-                "tables_metadata": [],
-                "warnings": [],
-                "error_message": "Không có bảng nào được khởi tạo trong bộ nhớ RAM.",
-            }
+            res = default_failure.copy()
+            res["warnings"] = index_warnings
+            res["error_message"] = "Không có bảng nào được khởi tạo trong bộ nhớ RAM."
+            return res
 
+        # 4. Kiểm toán chuyên sâu: Khóa chính (PK), Khóa ngoại (FK) & Leftmost Prefix B-Tree Coverage
         tables_metadata: List[Dict[str, Any]] = []
         total_foreign_keys = 0
+        tables_without_pk: List[str] = []
+        unindexed_foreign_keys: List[Dict[str, Any]] = []
+        seen_unindexed_keys = set()
 
         for tbl in tables:
             # Lấy thông tin cột: cid, name, type, notnull, dflt_value, pk
@@ -196,6 +209,31 @@ def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
                 for r in col_rows
             ]
 
+            # Kiểm tra xem bảng có Primary Key hay không
+            has_primary_key = any(r[5] > 0 for r in col_rows)
+            if not has_primary_key:
+                tables_without_pk.append(tbl)
+
+            # Quy tắc Leftmost Prefix B-Tree:
+            # 1. Cột Primary Key đứng đầu (pk == 1) hoặc single PK
+            leftmost_indexed_cols = set()
+            for r in col_rows:
+                if r[5] == 1:
+                    leftmost_indexed_cols.add(r[1])
+
+            # 2. Cột đứng ở vị trí đầu tiên (seqno == 0) của mọi Index trên bảng (PRAGMA index_list & index_info)
+            cursor.execute(f"PRAGMA index_list('{tbl}');")
+            idx_rows = cursor.fetchall()
+            for idx_r in idx_rows:
+                idx_name = idx_r[1]
+                cursor.execute(f"PRAGMA index_info('{idx_name}');")
+                info_rows = cursor.fetchall()
+                for info_r in info_rows:
+                    seqno = info_r[0]
+                    col_name = info_r[2]
+                    if seqno == 0 and col_name:
+                        leftmost_indexed_cols.add(col_name)
+
             # Lấy thông tin khóa ngoại: id, seq, table, from, to, on_update, on_delete, match
             cursor.execute(f"PRAGMA foreign_key_list('{tbl}');")
             fk_rows = cursor.fetchall()
@@ -210,41 +248,60 @@ def execute_and_audit_ddl(sql_code: str) -> Dict[str, Any]:
             referenced_tables = list(dict.fromkeys(r[2] for r in fk_rows))
             total_foreign_keys += len(foreign_keys)
 
+            # Đối chiếu từng cột FK với tập cột đã có B-Tree index (leftmost prefix)
+            for fk in foreign_keys:
+                from_col = fk["from_column"]
+                if from_col and from_col not in leftmost_indexed_cols:
+                    dedup_key = (tbl, from_col)
+                    if dedup_key not in seen_unindexed_keys:
+                        seen_unindexed_keys.add(dedup_key)
+                        unindexed_foreign_keys.append({
+                            "table": tbl,
+                            "fk_column": from_col,
+                            "referenced_table": fk["target_table"],
+                            "suggested_ddl": f"CREATE INDEX IF NOT EXISTS idx_{tbl}_{from_col} ON {tbl} ({from_col});",
+                        })
+
             tables_metadata.append({
                 "table_name": tbl,
+                "has_primary_key": has_primary_key,
                 "column_count": len(columns),
                 "columns": columns,
                 "foreign_key_count": len(foreign_keys),
                 "foreign_keys": foreign_keys,
                 "referenced_tables": referenced_tables,
+                "leftmost_indexed_columns": sorted(list(leftmost_indexed_cols)),
             })
 
-        # BƯỚC B: Thực thi các câu lệnh CREATE INDEX trong khối try...except riêng biệt
-        index_warnings: List[str] = []
-        for idx_stmt in index_statements:
-            try:
-                cursor.execute(idx_stmt)
-            except Exception as idx_err:
-                index_warnings.append(f"Chỉ mục '{idx_stmt[:50]}...': {str(idx_err)}")
+        # Tổng số Index vật lý hiện có (không tính auto-indexes nội bộ của SQLite)
+        cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%';")
+        total_indexes_created = cursor.fetchone()[0]
+
+        # Chuỗi script đề xuất tạo index
+        recommended_index_script = "\n".join(item["suggested_ddl"] for item in unindexed_foreign_keys)
+
+        # Điểm sức khỏe hiệu năng CSDL: 100 - len(tables_without_pk)*25 - len(unindexed_foreign_keys)*10
+        raw_score = 100 - len(tables_without_pk) * 25 - len(unindexed_foreign_keys) * 10
+        performance_health_score = max(0, min(100, raw_score))
 
         return {
             "execution_success": True,
             "table_count": len(tables_metadata),
             "total_foreign_keys": total_foreign_keys,
+            "total_indexes_created": total_indexes_created,
             "tables_metadata": tables_metadata,
+            "tables_without_pk": tables_without_pk,
+            "unindexed_foreign_keys": unindexed_foreign_keys,
+            "recommended_index_script": recommended_index_script,
+            "performance_health_score": performance_health_score,
             "warnings": index_warnings,
             "error_message": None,
         }
 
     except (sqlite3.Error, Exception) as db_err:
-        return {
-            "execution_success": False,
-            "table_count": 0,
-            "total_foreign_keys": 0,
-            "tables_metadata": [],
-            "warnings": [],
-            "error_message": f"Lỗi thực thi SQLite in-memory: {str(db_err)}",
-        }
+        res = default_failure.copy()
+        res["error_message"] = f"Lỗi thực thi SQLite in-memory: {str(db_err)}"
+        return res
     finally:
         if conn:
             conn.close()

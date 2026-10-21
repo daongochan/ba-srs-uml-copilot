@@ -371,6 +371,58 @@ CREATE INDEX CONCURRENTLY idx_bookings_customer ON bookings USING BTREE (custome
         assert result["error_message"] is None
         assert len(result["tables_metadata"]) == 2
 
+    def test_execute_and_audit_ddl_detects_unindexed_foreign_key(self):
+        """Test case 1: Phát hiện FK chưa đánh index và tự động sinh câu lệnh CREATE INDEX khắc phục."""
+        sql = """
+CREATE TABLE parent (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL
+);
+
+CREATE TABLE child (
+    id SERIAL PRIMARY KEY,
+    parent_id INT NOT NULL REFERENCES parent(id),
+    name VARCHAR(100) NOT NULL
+);
+"""
+        result = execute_and_audit_ddl(sql)
+        assert result["execution_success"] is True
+        assert result["table_count"] == 2
+        assert result["total_foreign_keys"] == 1
+        assert len(result["unindexed_foreign_keys"]) == 1
+        assert result["unindexed_foreign_keys"][0]["table"] == "child"
+        assert result["unindexed_foreign_keys"][0]["fk_column"] == "parent_id"
+        assert result["unindexed_foreign_keys"][0]["referenced_table"] == "parent"
+        assert "CREATE INDEX IF NOT EXISTS idx_child_parent_id ON child (parent_id);" in result["recommended_index_script"]
+        assert result["performance_health_score"] == 90
+        assert result["total_indexes_created"] == 0
+
+    def test_execute_and_audit_ddl_indexed_foreign_key_has_perfect_score(self):
+        """Test case 2: Bảng có FK đã được đánh B-Tree index đạt điểm 100/100."""
+        sql = """
+CREATE TABLE parent (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL
+);
+
+CREATE TABLE child (
+    id SERIAL PRIMARY KEY,
+    parent_id INT NOT NULL REFERENCES parent(id),
+    name VARCHAR(100) NOT NULL
+);
+
+CREATE INDEX idx_child_parent_id ON child (parent_id);
+"""
+        result = execute_and_audit_ddl(sql)
+        assert result["execution_success"] is True
+        assert result["table_count"] == 2
+        assert result["total_foreign_keys"] == 1
+        assert len(result["unindexed_foreign_keys"]) == 0
+        assert result["recommended_index_script"] == ""
+        assert result["performance_health_score"] == 100
+        assert result["total_indexes_created"] == 1
+
+
 
 class TestRequirementsLinter:
     """Test suite for deterministic IEEE 29148 and INVEST requirements linter."""
