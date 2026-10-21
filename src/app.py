@@ -30,8 +30,13 @@ from src.validators.consistency_checker import (
     audit_cross_model_consistency,
     auto_sync_rtm_and_erd_with_ddl,
 )
-
-
+from src.ui.theme import (
+    apply_custom_theme,
+    render_header_banner,
+    render_bento_grid,
+    render_telemetry_widget,
+    render_user_story_card,
+)
 
 # Tương thích ngược với các module và test
 export_srs_markdown = generate_markdown_report
@@ -43,6 +48,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# Áp dụng bộ quy tắc thiết kế chuẩn Enterprise SaaS từ UI/UX Pro Max
+apply_custom_theme()
 
 # Tự động dọn dẹp session_state nếu đối tượng SRSDocument từ phiên cũ thiếu thuộc tính mới
 for ss_key in ["srs_result", "doc"]:
@@ -391,105 +399,84 @@ def render_mermaid(mermaid_code: str, height: int = 560, diagram_type: str = "")
 # SIDEBAR
 # -------------------------------------------------------------
 with st.sidebar:
-    st.image("https://img.icons8.com/isometric/100/blueprint.png", width=70)
-    st.title("Thiết lập Copilot")
-    st.caption("AI Business Analyst & Solution Architect")
+    st.image("https://img.icons8.com/isometric/100/blueprint.png", width=64)
+    st.markdown("### 🛠️ Trung tâm Điều khiển")
+    st.caption("AI Principal BA & Solution Architect Workbench")
 
-    # Đọc API key từ môi trường hoặc cho phép nhập
-    env_key = os.getenv("GEMINI_API_KEY", "")
-    api_key_input = st.text_input(
-        "Google Gemini API Key:",
-        value=env_key,
-        type="password",
-        placeholder="AIzaSy...",
-        help="Lấy API Key miễn phí tại https://aistudio.google.com/",
-    )
-    api_key = api_key_input.strip() if api_key_input else env_key
+    # Đóng gói API Key Card
+    with st.container(border=True):
+        st.markdown("##### 🔑 Cấu hình Gemini API")
+        env_key = os.getenv("GEMINI_API_KEY", "")
+        api_key_input = st.text_input(
+            "Google Gemini API Key:",
+            value=env_key,
+            type="password",
+            placeholder="AIzaSy...",
+            help="Lấy API Key miễn phí tại https://aistudio.google.com/",
+            label_visibility="collapsed",
+        )
+        api_key = api_key_input.strip() if api_key_input else env_key
 
-    if api_key:
-        st.success("✅ Đã kết nối API Key", icon="🔑")
-    else:
-        st.warning("⚠️ Chưa cấu hình GEMINI_API_KEY", icon="⚡")
+        if api_key:
+            st.success("Đã kết nối API Key", icon="🔑")
+        else:
+            st.warning("Chưa cấu hình GEMINI_API_KEY", icon="⚡")
 
-    st.divider()
+    # Đóng gói Kịch bản Mẫu Khảo sát
+    with st.container(border=True):
+        st.markdown("##### 📚 Kịch bản Mẫu Khảo sát")
+        scenario_options = {
+            "custom": "-- Tự nhập ghi chú họp thực tế --",
+            "cinema_booking": "🎬 1. Rạp chiếu phim CineMax (Khóa ghế, Đặt vé)",
+            "bus_logistics": "🚌 2. Xe khách Phương Nam (Lịch chạy, Gửi hàng)",
+            "warehouse_inventory": "📦 3. Kho thông minh LogiTech (WMS, FIFO, Tồn kho)",
+        }
 
-    st.subheader("📚 Kịch bản Mẫu Khảo sát")
-    scenario_options = {
-        "custom": "-- Tự nhập ghi chú họp thực tế --",
-        "cinema_booking": "🎬 1. Rạp chiếu phim CineMax (Khóa ghế, Đặt vé)",
-        "bus_logistics": "🚌 2. Xe khách Phương Nam (Lịch chạy, Gửi hàng)",
-        "warehouse_inventory": "📦 3. Kho thông minh LogiTech (WMS, FIFO, Tồn kho)",
-    }
+        selected_scenario = st.selectbox(
+            "Chọn kịch bản nạp nhanh:",
+            options=list(scenario_options.keys()),
+            format_func=lambda k: scenario_options[k],
+            label_visibility="collapsed",
+        )
 
-    selected_scenario = st.selectbox(
-        "Chọn kịch bản nạp nhanh:",
-        options=list(scenario_options.keys()),
-        format_func=lambda k: scenario_options[k],
-    )
+        if selected_scenario != "custom" and selected_scenario in SAMPLE_SCENARIOS:
+            sample_data = SAMPLE_SCENARIOS[selected_scenario]
+            if st.button("📥 Nạp kịch bản này vào khung nhập", use_container_width=True):
+                st.session_state["raw_notes_input"] = sample_data["meeting_notes"]
+                st.rerun()
 
-    if selected_scenario != "custom" and selected_scenario in SAMPLE_SCENARIOS:
-        sample_data = SAMPLE_SCENARIOS[selected_scenario]
-        if st.button("📥 Nạp kịch bản này vào khung nhập", use_container_width=True):
-            st.session_state["raw_notes_input"] = sample_data["meeting_notes"]
-            st.rerun()
+    # Đóng gói Tối ưu Hiệu năng LLMOps
+    with st.container(border=True):
+        st.markdown("##### ⚡ Tối ưu Hiệu năng (LLMOps)")
+        force_cache_refresh = st.checkbox(
+            "⚡ Bỏ qua bộ nhớ đệm (Force Live Call)",
+            value=False,
+            help="Bắt buộc gọi trực tiếp Gemini API mà không sử dụng kết quả trong RAM cache",
+        )
+        if st.button("🗑️ Xóa Bộ nhớ đệm SHA-256 Cache", use_container_width=True):
+            default_srs_cache.clear()
+            st.toast("✅ Đã xóa toàn bộ bộ nhớ đệm SHA-256 Cache!", icon="🗑️")
 
-    st.divider()
-    st.subheader("⚡ Tối ưu Hiệu năng (LLMOps)")
-    force_cache_refresh = st.checkbox(
-        "⚡ Bỏ qua bộ nhớ đệm (Force Live AI Call)",
-        value=False,
-        help="Bắt buộc gọi trực tiếp Gemini API mà không sử dụng kết quả trong RAM cache",
-    )
-    if st.button("🗑️ Xóa Bộ nhớ đệm SHA-256 Cache", use_container_width=True):
-        default_srs_cache.clear()
-        st.toast("✅ Đã xóa toàn bộ bộ nhớ đệm SHA-256 Cache!", icon="🗑️")
-
+    # Bảng Giám sát Chỉ số Vận hành LLMOps Telemetry Panel
     telemetry: Optional[TelemetryMetrics] = st.session_state.get("telemetry_metrics")
     if telemetry:
-        st.divider()
-        st.markdown("### 📡 Trạng thái Vận hành LLMOps")
-        st.caption("Chỉ số đo lường hiệu năng và chi phí thời gian thực.")
+        st.markdown("##### 📡 Giám sát Chỉ số Vận hành LLMOps")
+        render_telemetry_widget(telemetry)
 
-        if telemetry.cache_hit:
-            st.success("⚡ **CACHE HIT (O(1) Memory)**")
-        else:
-            st.info("🌐 **LIVE GEMINI API**")
-
-        col_t1, col_t2 = st.columns(2)
-        with col_t1:
-            if telemetry.latency_ms >= 1000:
-                lat_str = f"{telemetry.latency_ms / 1000.0:.2f} s"
-            else:
-                lat_str = f"{telemetry.latency_ms:.1f} ms"
-            st.metric("⏱️ Độ trễ (Latency)", lat_str)
-        with col_t2:
-            st.metric("🔄 Lần Thử lại", f"{telemetry.retry_attempts}")
-
-        st.markdown(
-            f"**🪙 Chi phí Tokens:** `{telemetry.prompt_tokens}` prompt / "
-            f"`{telemetry.completion_tokens}` output (**Tổng: {telemetry.total_tokens}**)"
-        )
-        st.markdown(f"**🔑 SHA-256:** `{telemetry.content_hash[:12]}...`")
-
-    st.divider()
     st.markdown("""
-    **Bộ tiêu chuẩn áp dụng:**
-    - 📋 **IEEE 29148:** Requirements Engineering
-    - 🏛️ **BABOK v3:** Business Analysis Body of Knowledge
-    - 🔄 **Gherkin BDD:** Given - When - Then
-    - 🗄️ **3NF:** Third Normal Form (Boyce-Codd)
-    - ⚡ **Model:** `gemini-3.8-flash`
-    """)
+    <div style="font-size: 11px; color: #64748b; margin-top: 16px; line-height: 1.6; border-top: 1px solid #e2e8f0; padding-top: 12px;">
+        <strong>Hệ quy chiếu Tiêu chuẩn:</strong><br>
+        • <b>IEEE 29148:</b> Requirements Engineering<br>
+        • <b>BABOK v3:</b> Requirements Traceability Matrix<br>
+        • <b>Gherkin BDD:</b> Given - When - Then<br>
+        • <b>3NF Sandbox:</b> Boyce-Codd Normal Form<br>
+        • <b>Core LLM:</b> <code>gemini-3.8-flash</code>
+    </div>
+    """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------
 # MAIN CONTENT AREA
 # -------------------------------------------------------------
-st.title("📐 BA & System Architect Copilot")
-st.markdown(
-    "Tự động hóa chuyển đổi **Biên bản họp khách hàng thô (Meeting Notes)** thành "
-    "**Đặc tả SRS chuẩn IEEE 29148**, **Sơ đồ UML Sequence**, **ERD Chuẩn 3NF** và **Mã SQL DDL**."
-)
-
 # Khởi tạo session state cho input và output
 if "raw_notes_input" not in st.session_state:
     st.session_state["raw_notes_input"] = SAMPLE_SCENARIOS["cinema_booking"]["meeting_notes"]
@@ -501,24 +488,33 @@ else:
     if cached_doc is not None and not hasattr(cached_doc, "state_diagram_mermaid"):
         st.session_state["srs_result"] = None
 
-meeting_notes_text = st.text_area(
-    "Nội dung Biên bản Ghi chú Họp Khách hàng (Raw Meeting Notes):",
-    value=st.session_state["raw_notes_input"],
-    height=240,
-    placeholder="Dán nội dung thảo luận với khách hàng, yêu cầu nghiệp vụ, quy trình hoạt động...",
-)
+doc_preview: Optional[SRSDocument] = st.session_state.get("srs_result")
 
-col_btn, col_info = st.columns([1, 3])
-with col_btn:
-    generate_clicked = st.button(
-        "🚀 Phân tích & Sinh Đặc tả Hệ thống",
-        type="primary",
-        use_container_width=True,
+# Thanh Tiêu đề Top Navigation Banner với Workflow Stepper
+render_header_banner(has_result=bool(doc_preview))
+
+# Khung nhập Biên bản họp thông minh (Smart Expander: tự mở khi chưa có kết quả, tự thu gọn khi đã có SRS)
+with st.expander("📝 Biên bản Ghi chú Họp Khách hàng (Raw Meeting Notes Input)", expanded=(doc_preview is None)):
+    st.caption("Dán biên bản khảo sát yêu cầu nghiệp vụ, câu hỏi phỏng vấn stakeholder hoặc quy trình vận hành thô:")
+    meeting_notes_text = st.text_area(
+        "Nội dung Biên bản Ghi chú Họp Khách hàng (Raw Meeting Notes):",
+        value=st.session_state["raw_notes_input"],
+        height=220,
+        placeholder="Dán nội dung thảo luận với khách hàng, yêu cầu nghiệp vụ, quy trình hoạt động...",
+        label_visibility="collapsed",
     )
 
-with col_info:
-    if not api_key:
-        st.info("💡 Vui lòng cấu hình `GEMINI_API_KEY` ở thanh bên trái để thực hiện phân tích.")
+    col_btn, col_info = st.columns([1, 2])
+    with col_btn:
+        generate_clicked = st.button(
+            "🚀 Phân tích & Sinh Đặc tả Hệ thống",
+            type="primary",
+            use_container_width=True,
+        )
+
+    with col_info:
+        if not api_key:
+            st.info("💡 Vui lòng cấu hình `GEMINI_API_KEY` ở thanh bên trái để thực hiện phân tích.")
 
 if generate_clicked:
     if not api_key:
@@ -554,6 +550,7 @@ if generate_clicked:
                         f"🎉 Đã sinh thành công Đặc tả Hệ thống qua Gemini API ({telemetry_metrics.total_tokens} tokens)!",
                         icon="✅",
                     )
+                st.rerun()
             except Exception as e:
                 st.error(f"❌ Quá trình phân tích gặp sự cố: {str(e)}")
 
@@ -591,54 +588,48 @@ if doc:
         rtm_coverage_pct = linter_result["rtm_coverage_pct"]
         lint_warnings = linter_result["lint_warnings"]
 
-        st.markdown("##### 📊 Đánh giá Chất lượng Đặc tả: AI vs Thuật toán Kiểm định Xác định")
-        
-        # Hàng 1: Đánh giá cảm tính từ AI
-        metric_col1, metric_col2, metric_col3 = st.columns(3)
-        with metric_col1:
-            st.metric(
-                label="🤖 Điểm Tuân thủ IEEE 29148 (AI)",
-                value=f"{ieee_score}/100",
-                delta="Cảm tính AI",
-            )
-        with metric_col2:
-            st.metric(
-                label="🤖 Điểm User Story INVEST (AI)",
-                value=f"{invest_score}/100",
-                delta="Cảm tính AI",
-            )
-        with metric_col3:
-            st.metric(
-                label="📌 Số Yêu cầu Chức năng (FR)",
-                value=f"{fr_count} Yêu cầu",
-                delta="Đã cấu trúc hóa",
-            )
+        st.markdown("##### 📊 Chỉ số Đánh giá Chất lượng Đặc tả & Độ phủ (Bento KPI Grid)")
 
-        # Hàng 2: Bộ Chấm điểm & Kiểm định Yêu cầu Xác định (Deterministic Linter)
-        det_col1, det_col2, det_col3 = st.columns(3)
-        with det_col1:
-            delta_ieee = det_ieee_score - ieee_score
-            st.metric(
-                label="Điểm IEEE 29148 (Deterministic Linter)",
-                value=f"{det_ieee_score}/100",
-                delta=f"{delta_ieee:+d} so với AI" if delta_ieee != 0 else "Khớp với AI",
-                delta_color="normal" if det_ieee_score >= 80 else "inverse",
-            )
-        with det_col2:
-            delta_invest = det_invest_score - invest_score
-            st.metric(
-                label="Điểm INVEST (Rule-based)",
-                value=f"{det_invest_score}/100",
-                delta=f"{delta_invest:+d} so với AI" if delta_invest != 0 else "Khớp với AI",
-                delta_color="normal" if det_invest_score >= 80 else "inverse",
-            )
-        with det_col3:
-            st.metric(
-                label="Độ phủ Truy vết RTM (%)",
-                value=f"{rtm_coverage_pct}%",
-                delta="100% Hoàn chỉnh" if rtm_coverage_pct == 100.0 else f"Thiếu {100.0 - rtm_coverage_pct:.1f}%",
-                delta_color="normal" if rtm_coverage_pct == 100.0 else "inverse",
-            )
+        # Render Bento Grid KPI Cards
+        bento_cards = [
+            {
+                "title": "Điểm Chuẩn IEEE 29148",
+                "value": f"{det_ieee_score}/100",
+                "subtitle": f"Deterministic Linter (AI: {ieee_score})",
+                "score_pct": float(det_ieee_score),
+                "badge_text": "IEEE 29148" if det_ieee_score >= 80 else "Cần Chuẩn Hóa",
+                "badge_type": "success" if det_ieee_score >= 80 else "warning",
+                "icon": "📐",
+            },
+            {
+                "title": "Điểm User Story INVEST",
+                "value": f"{det_invest_score}/100",
+                "subtitle": f"Rule-based (AI: {invest_score})",
+                "score_pct": float(det_invest_score),
+                "badge_text": "INVEST Criteria" if det_invest_score >= 80 else "Cần Tách Nhỏ",
+                "badge_type": "success" if det_invest_score >= 80 else "warning",
+                "icon": "🎯",
+            },
+            {
+                "title": "Độ phủ Truy vết RTM",
+                "value": f"{rtm_coverage_pct}%",
+                "subtitle": "BABOK v3 Traceability",
+                "score_pct": float(rtm_coverage_pct),
+                "badge_text": "100% Hoàn chỉnh" if rtm_coverage_pct == 100.0 else f"Thiếu {100.0 - rtm_coverage_pct:.1f}%",
+                "badge_type": "success" if rtm_coverage_pct == 100.0 else "danger",
+                "icon": "🔗",
+            },
+            {
+                "title": "Yêu cầu Chức năng",
+                "value": f"{fr_count} Yêu cầu",
+                "subtitle": "MoSCoW & BDD Gherkin",
+                "score_pct": min(100.0, fr_count * 20.0),
+                "badge_text": "Cấu trúc hóa",
+                "badge_type": "info",
+                "icon": "📋",
+            },
+        ]
+        render_bento_grid(bento_cards)
 
         # Báo cáo Kiểm toán Cú pháp & Ngữ nghĩa
         if lint_warnings:
@@ -667,34 +658,10 @@ if doc:
             with actors_cols[idx % len(actors_cols)]:
                 st.success(f"👤 **{actor}**")
 
-        st.markdown("#### 📝 Danh mục Yêu cầu Chức năng (Functional Requirements)")
+        st.markdown("#### 📝 Danh mục Yêu cầu Chức năng (Functional Requirements & MoSCoW Cards)")
+        st.caption("Mỗi yêu cầu được gắn nhãn ưu tiên MoSCoW và đóng khung kịch bản nghiệm thu Given-When-Then chuẩn Gherkin BDD:")
         for fr in doc.functional_requirements:
-            priority_color = {
-                "High": "red",
-                "Must Have": "red",
-                "Medium": "orange",
-                "Should Have": "orange",
-                "Low": "green",
-                "Could Have": "green",
-            }.get(fr.priority, "blue")
-
-            with st.container(border=True):
-                col_fr_title, col_fr_prio = st.columns([4, 1])
-                with col_fr_title:
-                    st.markdown(f"##### **[{fr.req_id}]** {fr.title}")
-                with col_fr_prio:
-                    st.markdown(f":{priority_color}[**{fr.priority}**]")
-
-                st.markdown(f"**User Story:** *{fr.user_story}*")
-
-                with st.expander(f"🔍 Xem {len(fr.acceptance_criteria)} Tiêu chí Chấp nhận (Acceptance Criteria - Gherkin BDD)"):
-                    for ac_idx, ac in enumerate(fr.acceptance_criteria, start=1):
-                        st.markdown(f"**Kịch bản {ac_idx}:**")
-                        st.markdown(f"- 🟡 **Given:** {ac.given}")
-                        st.markdown(f"- 🔵 **When:** {ac.when}")
-                        st.markdown(f"- 🟢 **Then:** {ac.then}")
-                        if ac_idx < len(fr.acceptance_criteria):
-                            st.divider()
+            render_user_story_card(fr)
 
         st.markdown("#### 🛡️ Yêu cầu Phi Chức năng (Non-Functional Requirements)")
         nfr_data = [
@@ -730,21 +697,45 @@ if doc:
         st.caption("Đối chiếu tập hợp thực thể trên cả 3 tầng: Ma trận RTM (Tab 1), Sơ đồ ERD 3NF (Tab 3), và Kịch bản SQL DDL (Tab 3) bằng lý thuyết Đại số Tập hợp.")
 
         consistency_audit = audit_cross_model_consistency(doc)
-        c_col1, c_col2, c_col3, c_col4 = st.columns(4)
-        with c_col1:
-            score = consistency_audit["consistency_score"]
-            st.metric(
-                "Đồng bộ Liên Mô hình",
-                f"{score}%",
-                delta="100% Đồng nhất" if score == 100 else f"Lệch {100 - score}%",
-                delta_color="normal" if score == 100 else "inverse",
-            )
-        with c_col2:
-            st.metric("Tập Bảng RTM (T_RTM)", f"{len(consistency_audit['rtm_tables'])} Bảng")
-        with c_col3:
-            st.metric("Thực thể ERD (T_ERD)", f"{len(consistency_audit['erd_entities'])} Thực thể")
-        with c_col4:
-            st.metric("Bảng Vật lý DDL (T_DDL)", f"{len(consistency_audit['ddl_tables'])} Bảng")
+        consistency_cards = [
+            {
+                "title": "Đồng bộ Liên Mô hình",
+                "value": f"{consistency_audit['consistency_score']}%",
+                "subtitle": "Đại số Tập hợp RTM ↔ ERD ↔ DDL",
+                "score_pct": float(consistency_audit['consistency_score']),
+                "badge_text": "100% Đồng nhất" if consistency_audit['consistency_score'] == 100 else f"Lệch {100 - consistency_audit['consistency_score']}%",
+                "badge_type": "success" if consistency_audit['consistency_score'] == 100 else "danger",
+                "icon": "🔄",
+            },
+            {
+                "title": "Tập Bảng RTM (T_RTM)",
+                "value": f"{len(consistency_audit['rtm_tables'])} Bảng",
+                "subtitle": "Traceability Scope",
+                "score_pct": min(100.0, len(consistency_audit['rtm_tables']) * 20.0),
+                "badge_text": "BABOK v3",
+                "badge_type": "info",
+                "icon": "📋",
+            },
+            {
+                "title": "Thực thể ERD (T_ERD)",
+                "value": f"{len(consistency_audit['erd_entities'])} Thực thể",
+                "subtitle": "Mermaid 3NF Diagram",
+                "score_pct": min(100.0, len(consistency_audit['erd_entities']) * 20.0),
+                "badge_text": "Logical Model",
+                "badge_type": "info",
+                "icon": "🗄️",
+            },
+            {
+                "title": "Bảng Vật lý (T_DDL)",
+                "value": f"{len(consistency_audit['ddl_tables'])} Bảng",
+                "subtitle": "SQLite RAM Schema",
+                "score_pct": min(100.0, len(consistency_audit['ddl_tables']) * 20.0),
+                "badge_text": "Physical DDL",
+                "badge_type": "info",
+                "icon": "💾",
+            },
+        ]
+        render_bento_grid(consistency_cards)
 
         if not consistency_audit["is_fully_synced"]:
             phantom = consistency_audit.get("phantom_tables_in_rtm", [])
@@ -890,37 +881,46 @@ if doc:
 
         db_audit = execute_and_audit_ddl(doc.sql_ddl_script)
 
-        audit_col1, audit_col2, audit_col3, audit_col4 = st.columns(4)
-        with audit_col1:
-            if db_audit["execution_success"]:
-                st.metric("⚙️ Khởi tạo Bảng trong RAM", "PASS (100%)", delta="Khả thi vật lý")
-            else:
-                st.metric("⚙️ Khởi tạo Bảng trong RAM", "FAIL", delta="Lỗi cú pháp DDL", delta_color="inverse")
-
-        with audit_col2:
-            st.metric(
-                "🗄️ Bảng & Chỉ mục",
-                f"{db_audit['table_count']} Bảng / {db_audit.get('total_indexes_created', 0)} Indexes",
-                delta="Cấu trúc vật lý",
-            )
-
-        with audit_col3:
-            st.metric(
-                "🔑 Ràng buộc Khóa ngoại (FK)",
-                f"{db_audit['total_foreign_keys']} Khóa ngoại",
-                delta="Toàn vẹn tham chiếu",
-            )
-
-        with audit_col4:
-            health_score = db_audit.get("performance_health_score", 100)
-            score_delta = "Tối ưu hóa B-Tree" if health_score == 100 else ("Cần tối ưu Index" if health_score >= 80 else "Nguy cơ Full Scan")
-            delta_color = "normal" if health_score >= 90 else ("off" if health_score >= 80 else "inverse")
-            st.metric(
-                "⚡ Điểm Hiệu năng B-Tree",
-                f"{health_score}/100",
-                delta=score_delta,
-                delta_color=delta_color,
-            )
+        health_score = db_audit.get("performance_health_score", 100)
+        db_bento_cards = [
+            {
+                "title": "Khởi tạo RAM Sandbox",
+                "value": "PASS (100%)" if db_audit["execution_success"] else "FAIL (0%)",
+                "subtitle": "SQLite :memory: Execution",
+                "score_pct": 100.0 if db_audit["execution_success"] else 0.0,
+                "badge_text": "Khả thi vật lý" if db_audit["execution_success"] else "Lỗi DDL",
+                "badge_type": "success" if db_audit["execution_success"] else "danger",
+                "icon": "⚙️",
+            },
+            {
+                "title": "Bảng & Chỉ mục B-Tree",
+                "value": f"{db_audit['table_count']} Bảng / {db_audit.get('total_indexes_created', 0)} Index",
+                "subtitle": "Cấu trúc CSDL vật lý",
+                "score_pct": min(100.0, db_audit['table_count'] * 20.0),
+                "badge_text": "3NF Physical",
+                "badge_type": "info",
+                "icon": "🗄️",
+            },
+            {
+                "title": "Ràng buộc Khóa ngoại (FK)",
+                "value": f"{db_audit['total_foreign_keys']} Ràng buộc",
+                "subtitle": "Toàn vẹn tham chiếu",
+                "score_pct": min(100.0, db_audit['total_foreign_keys'] * 25.0),
+                "badge_text": "FK Integrity",
+                "badge_type": "info",
+                "icon": "🔑",
+            },
+            {
+                "title": "Điểm Hiệu năng B-Tree",
+                "value": f"{health_score}/100",
+                "subtitle": "Leftmost Prefix Coverage",
+                "score_pct": float(health_score),
+                "badge_text": "Tối ưu hóa B-Tree" if health_score == 100 else ("Cần tối ưu" if health_score >= 80 else "Nguy cơ Scan"),
+                "badge_type": "success" if health_score >= 90 else ("warning" if health_score >= 80 else "danger"),
+                "icon": "⚡",
+            },
+        ]
+        render_bento_grid(db_bento_cards)
 
         if not db_audit["execution_success"]:
             st.error(f"❌ Chi tiết sự cố thực thi Sandbox: {db_audit.get('error_message')}")
@@ -1002,21 +1002,45 @@ if doc:
             st.caption("Đối chiếu tập hợp thực thể trên cả 3 tầng: Ma trận RTM (Tab 1), Sơ đồ ERD 3NF (Tab 3), và Kịch bản SQL DDL (Tab 3) bằng lý thuyết Đại số Tập hợp.")
 
             consistency_audit = audit_cross_model_consistency(doc)
-            c3_col1, c3_col2, c3_col3, c3_col4 = st.columns(4)
-            with c3_col1:
-                score = consistency_audit["consistency_score"]
-                st.metric(
-                    "Đồng bộ Liên Mô hình",
-                    f"{score}%",
-                    delta="100% Đồng nhất" if score == 100 else f"Lệch {100 - score}%",
-                    delta_color="normal" if score == 100 else "inverse",
-                )
-            with c3_col2:
-                st.metric("Tập Bảng RTM (T_RTM)", f"{len(consistency_audit['rtm_tables'])} Bảng")
-            with c3_col3:
-                st.metric("Thực thể ERD (T_ERD)", f"{len(consistency_audit['erd_entities'])} Thực thể")
-            with c3_col4:
-                st.metric("Bảng Vật lý DDL (T_DDL)", f"{len(consistency_audit['ddl_tables'])} Bảng")
+            c3_cards = [
+                {
+                    "title": "Đồng bộ Liên Mô hình",
+                    "value": f"{consistency_audit['consistency_score']}%",
+                    "subtitle": "Đại số Tập hợp RTM ↔ ERD ↔ DDL",
+                    "score_pct": float(consistency_audit['consistency_score']),
+                    "badge_text": "100% Đồng nhất" if consistency_audit['consistency_score'] == 100 else f"Lệch {100 - consistency_audit['consistency_score']}%",
+                    "badge_type": "success" if consistency_audit['consistency_score'] == 100 else "danger",
+                    "icon": "🔄",
+                },
+                {
+                    "title": "Tập Bảng RTM (T_RTM)",
+                    "value": f"{len(consistency_audit['rtm_tables'])} Bảng",
+                    "subtitle": "Traceability Scope",
+                    "score_pct": min(100.0, len(consistency_audit['rtm_tables']) * 20.0),
+                    "badge_text": "BABOK v3",
+                    "badge_type": "info",
+                    "icon": "📋",
+                },
+                {
+                    "title": "Thực thể ERD (T_ERD)",
+                    "value": f"{len(consistency_audit['erd_entities'])} Thực thể",
+                    "subtitle": "Mermaid 3NF Diagram",
+                    "score_pct": min(100.0, len(consistency_audit['erd_entities']) * 20.0),
+                    "badge_text": "Logical Model",
+                    "badge_type": "info",
+                    "icon": "🗄️",
+                },
+                {
+                    "title": "Bảng Vật lý (T_DDL)",
+                    "value": f"{len(consistency_audit['ddl_tables'])} Bảng",
+                    "subtitle": "SQLite RAM Schema",
+                    "score_pct": min(100.0, len(consistency_audit['ddl_tables']) * 20.0),
+                    "badge_text": "Physical DDL",
+                    "badge_type": "info",
+                    "icon": "💾",
+                },
+            ]
+            render_bento_grid(c3_cards)
 
             if not consistency_audit["is_fully_synced"]:
                 phantom = consistency_audit.get("phantom_tables_in_rtm", [])

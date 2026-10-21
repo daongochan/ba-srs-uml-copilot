@@ -11,3 +11,4 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+.ui-ux-skill-temp/
