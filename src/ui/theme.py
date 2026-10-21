@@ -89,9 +89,14 @@ def apply_custom_theme() -> None:
         /* =====================================================================
            2. GLOBAL STREAMLIT OVERRIDES
            ===================================================================== */
-        html, body, [class*="css"] {
+        html, body, p, input, textarea, button, select, label {
             font-family: var(--font-sans) !important;
             color: var(--text-body);
+        }
+
+        /* Explicitly preserve icon fonts for Streamlit expanders and buttons */
+        [data-testid*="Icon"], [data-testid*="icon"], [class*="material-symbols"], span[class*="material"], [data-testid="stIcon"], i[class*="material"], [data-testid="stExpanderToggleIcon"] {
+            font-family: 'Material Symbols Rounded', 'Material Icons', sans-serif !important;
         }
 
         /* Nền ứng dụng chính */

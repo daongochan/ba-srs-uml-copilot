@@ -13,67 +13,19 @@ from src.validators.consistency_checker import (
     auto_sync_rtm_and_erd_with_ddl,
 )
 from src.ui.theme import render_bento_grid, render_user_story_card
+from src.ui.components.editorial import render_editorial_story_card
 
 
 def render_tab_srs_requirements(doc: SRSDocument) -> None:
     """Render nội dung Tab 1: Đặc tả Yêu cầu SRS, User Stories và RTM."""
     # Thẻ chỉ số chất lượng & kiểm toán (Quality Audit Metrics)
     quality_audit = getattr(doc, "quality_audit", None)
-    ieee_score = getattr(quality_audit, "ieee_compliance_score", 95) if quality_audit else 95
-    invest_score = getattr(quality_audit, "invest_score", 90) if quality_audit else 90
-    fr_count = len(doc.functional_requirements)
 
     # Chạy Bộ Kiểm định Cú pháp Xác định (Deterministic Static Linter)
     linter_result = evaluate_srs_deterministically(doc)
-    det_ieee_score = linter_result["deterministic_ieee_score"]
-    det_invest_score = linter_result["deterministic_invest_score"]
-    rtm_coverage_pct = linter_result["rtm_coverage_pct"]
     lint_warnings = linter_result["lint_warnings"]
 
-    st.markdown("##### 📊 Chỉ số Đánh giá Chất lượng Đặc tả & Độ phủ (Bento KPI Grid)")
-
-    # Render Bento Grid KPI Cards
-    bento_cards = [
-        {
-            "title": "Điểm Chuẩn IEEE 29148",
-            "value": f"{det_ieee_score}/100",
-            "subtitle": f"Deterministic Linter (AI: {ieee_score})",
-            "score_pct": float(det_ieee_score),
-            "badge_text": "IEEE 29148" if det_ieee_score >= 80 else "Cần Chuẩn Hóa",
-            "badge_type": "success" if det_ieee_score >= 80 else "warning",
-            "icon": "📐",
-        },
-        {
-            "title": "Điểm User Story INVEST",
-            "value": f"{det_invest_score}/100",
-            "subtitle": f"Rule-based (AI: {invest_score})",
-            "score_pct": float(det_invest_score),
-            "badge_text": "INVEST Criteria" if det_invest_score >= 80 else "Cần Tách Nhỏ",
-            "badge_type": "success" if det_invest_score >= 80 else "warning",
-            "icon": "🎯",
-        },
-        {
-            "title": "Độ phủ Truy vết RTM",
-            "value": f"{rtm_coverage_pct}%",
-            "subtitle": "BABOK v3 Traceability",
-            "score_pct": float(rtm_coverage_pct),
-            "badge_text": (
-                "100% Hoàn chỉnh" if rtm_coverage_pct == 100.0 else f"Thiếu {100.0 - rtm_coverage_pct:.1f}%"
-            ),
-            "badge_type": "success" if rtm_coverage_pct == 100.0 else "danger",
-            "icon": "🔗",
-        },
-        {
-            "title": "Yêu cầu Chức năng",
-            "value": f"{fr_count} Yêu cầu",
-            "subtitle": "MoSCoW & BDD Gherkin",
-            "score_pct": min(100.0, fr_count * 20.0),
-            "badge_text": "Cấu trúc hóa",
-            "badge_type": "info",
-            "icon": "📋",
-        },
-    ]
-    render_bento_grid(bento_cards)
+    st.markdown("#### 📋 Đặc tả Yêu cầu Nghiệp vụ Chuẩn IEEE 29148")
 
     # Báo cáo Kiểm toán Cú pháp & Ngữ nghĩa
     if lint_warnings:
@@ -114,7 +66,7 @@ def render_tab_srs_requirements(doc: SRSDocument) -> None:
         "Mỗi yêu cầu được gắn nhãn ưu tiên MoSCoW và đóng khung kịch bản nghiệm thu Given-When-Then chuẩn Gherkin BDD:"
     )
     for fr in doc.functional_requirements:
-        render_user_story_card(fr)
+        render_editorial_story_card(fr)
 
     st.markdown("#### 🛡️ Yêu cầu Phi Chức năng (Non-Functional Requirements)")
     nfr_data = [

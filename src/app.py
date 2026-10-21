@@ -22,6 +22,13 @@ from src.ui.theme import (
     render_header_banner,
     render_telemetry_widget,
 )
+from src.ui.styles import apply_editorial_styles
+from src.ui.components import (
+    render_editorial_header,
+    render_editorial_kpi_strip,
+    render_editorial_empty_state,
+    render_editorial_tech_expander,
+)
 from src.ui.components.mermaid_viewer import render_mermaid
 from src.ui.tabs import (
     render_tab_srs_requirements,
@@ -43,8 +50,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Áp dụng bộ quy tắc thiết kế chuẩn Enterprise SaaS từ UI/UX Pro Max
+# Áp dụng bộ quy tắc thiết kế chuẩn Editorial Craft (Tài Liệu Biên Tập)
 apply_custom_theme()
+apply_editorial_styles()
 
 # Tự động dọn dẹp session_state nếu đối tượng SRSDocument từ phiên cũ thiếu thuộc tính mới
 for ss_key in ["srs_result", "doc"]:
@@ -58,12 +66,12 @@ for ss_key in ["srs_result", "doc"]:
 with st.sidebar:
     sidebar_header_html = """
     <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 4px 0;">
-        <div style="width: 44px; height: 44px; background: linear-gradient(135deg, #4f46e5, #3b82f6); border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3); font-size: 22px;">
-            📐
+        <div style="width: 42px; height: 42px; background: linear-gradient(135deg, #0d9488, #0f766e); border-radius: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(13, 148, 136, 0.25); font-size: 20px;">
+            📖
         </div>
         <div>
-            <div style="font-size: 17px; font-weight: 800; color: #0f172a; line-height: 1.2;">Trung tâm Điều khiển</div>
-            <div style="font-size: 11.5px; color: #64748b; font-weight: 500;">AI Principal BA & Architect</div>
+            <div style="font-size: 16px; font-weight: 700; color: #1c1917; line-height: 1.2;">Trung tâm Điều khiển</div>
+            <div style="font-size: 11.5px; color: #57534e; font-weight: 500;">Hệ thống Đặc tả & Kiến trúc</div>
         </div>
     </div>
     """
@@ -164,11 +172,27 @@ if st.query_params.get("demo") == "1" and st.session_state.get("srs_result") is 
 doc_preview: Optional[SRSDocument] = st.session_state.get("srs_result")
 
 # Thanh Tiêu đề Top Navigation Banner với Workflow Stepper
-render_header_banner(has_result=bool(doc_preview))
+render_editorial_header(has_result=bool(doc_preview))
+
+# Hàng 3 thẻ Kịch bản Nghiệp vụ Mẫu 1-Click
+st.markdown("##### 📌 Chọn nhanh Kịch bản Khảo sát mẫu:")
+chip_col1, chip_col2, chip_col3 = st.columns(3)
+with chip_col1:
+    if st.button("🎬 1. Rạp Chiếu Phim (CineMax)", use_container_width=True, help="Khóa ghế 10 phút, đặt vé, chống tranh chấp chỗ ngồi"):
+        st.session_state["raw_notes_input"] = SAMPLE_SCENARIOS["cinema_booking"]["meeting_notes"]
+        st.rerun()
+with chip_col2:
+    if st.button("🚌 2. Xe Khách Liên Tỉnh", use_container_width=True, help="Lịch xuất bến, đặt vé xe, trung chuyển hành khách"):
+        st.session_state["raw_notes_input"] = SAMPLE_SCENARIOS["bus_logistics"]["meeting_notes"]
+        st.rerun()
+with chip_col3:
+    if st.button("📦 3. Kho Thông Minh (WMS)", use_container_width=True, help="Quản lý tồn kho FIFO, nhập xuất hàng hóa, kiểm kê"):
+        st.session_state["raw_notes_input"] = SAMPLE_SCENARIOS["warehouse_inventory"]["meeting_notes"]
+        st.rerun()
 
 # Khung nhập Biên bản họp thông minh (Smart Expander: tự mở khi chưa có kết quả, tự thu gọn khi đã có SRS)
 with st.expander(
-    "📝 Biên bản Ghi chú Họp Khách hàng (Raw Meeting Notes Input)",
+    "📝 Biên bản Ghi chú Cuộc họp Yêu cầu (Meeting Notes)",
     expanded=(doc_preview is None),
 ):
     st.caption("Dán biên bản khảo sát yêu cầu nghiệp vụ, câu hỏi phỏng vấn stakeholder hoặc quy trình vận hành thô:")
@@ -184,7 +208,7 @@ with st.expander(
     col_btn, col_info = st.columns([1, 2])
     with col_btn:
         generate_clicked = st.button(
-            "🚀 Phân tích & Sinh Đặc tả Hệ thống",
+            "🚀 Phân tích Yêu cầu & Tạo Đặc tả",
             type="primary",
             use_container_width=True,
         )
@@ -250,12 +274,15 @@ if doc:
     st.markdown("---")
     st.subheader(f"📑 Dự án: {doc.project_title}")
 
+    # Dải 4 Thẻ KPI Nghiệp vụ Chuẩn Biên Tập (Editorial KPI Strip)
+    render_editorial_kpi_strip(doc, st.session_state.get("telemetry_metrics"))
+
     tab1, tab2, tab3, tab4 = st.tabs(
         [
-            "📋 Tab 1: Đặc tả Yêu cầu (SRS & User Stories)",
-            "🔄 Tab 2: Mô hình Động UML (Sequence & State Machine)",
-            "🗄️ Tab 3: Thiết kế CSDL (ERD 3NF & SQL DDL)",
-            "📥 Tab 4: Xuất Tài liệu (Export Markdown)",
+            "1. Yêu cầu (SRS)",
+            "2. Mô hình Động",
+            "3. Thiết kế CSDL",
+            "4. Xuất bản Hồ sơ",
         ]
     )
 
@@ -270,3 +297,10 @@ if doc:
 
     with tab4:
         render_tab_export_bundle(doc)
+
+    # Chi tiết Kỹ thuật & Báo cáo Kiểm toán (Tiết lộ dần)
+    render_editorial_tech_expander(st.session_state.get("telemetry_metrics"), doc)
+else:
+    # Trạng thái ban đầu khi chưa phân tích (Editorial Empty State)
+    render_editorial_empty_state()
+

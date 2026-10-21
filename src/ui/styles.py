@@ -52,8 +52,9 @@ from src.ui.tokens import (
 
 EDITORIAL_CSS: Final[str] = f"""
 <style>
-/* 1. Google Fonts Import: Be Vietnam Pro & JetBrains Mono */
+/* 1. Google Fonts Import: Be Vietnam Pro, JetBrains Mono & Material Symbols */
 @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
 
 :root {{
     --font-sans: {FONT_PRIMARY};
@@ -93,9 +94,27 @@ EDITORIAL_CSS: Final[str] = f"""
 }}
 
 /* 2. Global Document & Typography Resets */
-html, body, [class*="st-"] {{
+html, body, p, h1, h2, h3, h4, h5, h6, input, textarea, select, label {{
     font-family: var(--font-sans) !important;
     color: var(--color-stone-900);
+}}
+
+/* Explicitly preserve and style icon fonts for Streamlit expanders and buttons */
+[data-testid*="Icon"], [data-testid*="icon"], [class*="e1vmumty0"], [class*="e1fmktau2"], [class*="material-symbols"], span[class*="material"], [data-testid="stIcon"], i[class*="material"], [data-testid="stExpanderToggleIcon"] {{
+    font-family: 'Material Symbols Rounded' !important;
+    font-weight: normal !important;
+    font-style: normal !important;
+    font-size: 20px !important;
+    line-height: 1 !important;
+    display: inline-block !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    word-wrap: normal !important;
+    white-space: nowrap !important;
+    direction: ltr !important;
+    -webkit-font-smoothing: antialiased !important;
+    text-rendering: optimizeLegibility !important;
+    font-feature-settings: 'liga' !important;
 }}
 
 /* Main container surface background */
@@ -126,21 +145,31 @@ html, body, [class*="st-"] {{
     border-color: var(--color-teal-800) !important;
     box-shadow: 0 2px 4px rgba(13, 148, 136, 0.25) !important;
 }}
+[data-testid="stBaseButton-primary"] *, button[kind="primary"] * {{
+    color: #ffffff !important;
+}}
 
 /* Secondary / Standard Buttons */
 [data-testid="stBaseButton-secondary"], button[kind="secondary"] {{
     background-color: var(--color-white) !important;
-    color: var(--color-stone-700) !important;
+    color: var(--color-stone-800) !important;
     border: 1px solid var(--color-stone-300) !important;
     border-radius: {RADIUS_MD} !important;
-    font-weight: 500 !important;
+    font-weight: 600 !important;
     font-size: 13.5px !important;
+    box-shadow: {SHADOW_SUBTLE} !important;
     transition: all 0.15s ease-in-out !important;
 }}
 [data-testid="stBaseButton-secondary"]:hover, button[kind="secondary"]:hover {{
-    background-color: var(--color-stone-50) !important;
+    background-color: var(--color-teal-50) !important;
     color: var(--color-teal-800) !important;
     border-color: var(--color-teal-600) !important;
+}}
+[data-testid="stBaseButton-secondary"] *, button[kind="secondary"] * {{
+    color: var(--color-stone-800) !important;
+}}
+[data-testid="stBaseButton-secondary"]:hover *, button[kind="secondary"]:hover * {{
+    color: var(--color-teal-800) !important;
 }}
 
 /* 4. Streamlit Tabs Styling (Clean, No Pagination Wrap, High Contrast) */
