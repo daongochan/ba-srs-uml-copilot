@@ -20,6 +20,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "pip-audit>=2.7.0",
     "ruff>=0.17.0",
     "pre-commit>=4.0.0",
 ]
@@ -62,4 +64,4 @@ indent-style = "space"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short --cov=src --cov-report=term-missing --cov-fail-under=78"
