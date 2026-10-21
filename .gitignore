@@ -34,6 +34,7 @@ build/
 # Temporary directories
 .ui-ux-skill-temp/
 node_modules/
+scratch/
 
 # OS specific files
 .DS_Store

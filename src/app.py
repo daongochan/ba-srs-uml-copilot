@@ -155,6 +155,12 @@ else:
     if cached_doc is not None and not hasattr(cached_doc, "state_diagram_mermaid"):
         st.session_state["srs_result"] = None
 
+# Hỗ trợ chế độ demo trực quan cho visual audit / testing qua query param ?demo=1
+if st.query_params.get("demo") == "1" and st.session_state.get("srs_result") is None:
+    from tests.test_ui_modular_tabs import _build_test_doc
+
+    st.session_state["srs_result"] = _build_test_doc()
+
 doc_preview: Optional[SRSDocument] = st.session_state.get("srs_result")
 
 # Thanh Tiêu đề Top Navigation Banner với Workflow Stepper
