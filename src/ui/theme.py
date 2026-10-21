@@ -9,19 +9,23 @@ from typing import List, Dict, Any, Optional
 import streamlit as st
 
 
-def render_html(html_str: str) -> None:
+def render_clean_html(raw_html: str) -> None:
     """Loại bỏ thụt lề đầu dòng và các dòng trống thừa trước khi gọi st.markdown.
 
     Biện pháp này triệt tiêu hoàn toàn lỗi CommonMark hiểu nhầm chuỗi HTML
     thành Markdown Indented Code Block (<pre><code>) khi có dòng trống đi kèm thụt lề >= 4 spaces.
     """
-    if not html_str:
+    if not raw_html:
         return
     # Loại bỏ khoảng trắng / tab ở đầu mỗi dòng
-    cleaned = re.sub(r"^[ \t]+", "", html_str, flags=re.MULTILINE)
+    cleaned = re.sub(r"^[ \t]+", "", raw_html, flags=re.MULTILINE)
     # Loại bỏ các dòng trống liên tiếp
     cleaned = re.sub(r"\n\s*\n", "\n", cleaned).strip()
     st.markdown(cleaned, unsafe_allow_html=True)
+
+
+# Alias tương thích ngược
+render_html = render_clean_html
 
 
 def apply_custom_theme() -> None:
@@ -648,7 +652,7 @@ def render_header_banner(has_result: bool = False) -> None:
 </div>
 </div>
 </div>"""
-    render_html(banner_html)
+    render_clean_html(banner_html)
 
 
 def render_bento_card(
@@ -716,20 +720,20 @@ def render_kpi_card(
         badge_type=badge_type,
         icon=icon,
     )
-    render_html(html_card)
+    render_clean_html(html_card)
 
 
 def render_bento_grid(cards: List[Any]) -> None:
-    """Hiển thị lưới Bento KPI Cards bằng st.columns(4) và render_html riêng biệt cho từng cột."""
+    """Hiển thị lưới Bento KPI Cards bằng st.columns(4) và render_clean_html riêng biệt cho từng cột."""
     if not cards:
         return
     cols = st.columns(len(cards))
     for col, item in zip(cols, cards):
         with col:
             if isinstance(item, str):
-                render_html(item)
+                render_clean_html(item)
             elif isinstance(item, dict):
-                render_html(render_bento_card(**item))
+                render_clean_html(render_bento_card(**item))
 
 
 def render_telemetry_widget(telemetry: Any) -> None:
@@ -790,7 +794,7 @@ def render_telemetry_widget(telemetry: Any) -> None:
 <span class="telemetry-hash-code">{safe_hash}...</span>
 </div>
 </div>"""
-    render_html(html_str)
+    render_clean_html(html_str)
 
 
 def render_user_story_card(
@@ -865,4 +869,4 @@ def render_user_story_card(
         f"{all_ac}"
         f"</div>"
     )
-    render_html(card_html)
+    render_clean_html(card_html)

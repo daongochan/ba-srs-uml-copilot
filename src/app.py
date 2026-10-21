@@ -18,7 +18,7 @@ from src.services.exporter import generate_markdown_report
 from src.data.sample_inputs import SAMPLE_SCENARIOS
 from src.ui.theme import (
     apply_custom_theme,
-    render_html,
+    render_clean_html,
     render_header_banner,
     render_telemetry_widget,
 )
@@ -67,7 +67,7 @@ with st.sidebar:
         </div>
     </div>
     """
-    render_html(sidebar_header_html)
+    render_clean_html(sidebar_header_html)
 
     # Đóng gói API Key Card
     with st.container(border=True):
@@ -139,7 +139,7 @@ with st.sidebar:
         • <b>Core LLM:</b> <code>gemini-3.8-flash</code>
     </div>
     """
-    render_html(standards_footer)
+    render_clean_html(standards_footer)
 
 # -------------------------------------------------------------
 # MAIN CONTENT AREA

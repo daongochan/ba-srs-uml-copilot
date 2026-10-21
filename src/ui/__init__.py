@@ -2,6 +2,7 @@
 
 from src.ui.theme import (
     apply_custom_theme,
+    render_clean_html,
     render_html,
     render_header_banner,
     render_bento_card,
@@ -20,6 +21,7 @@ from src.ui.tabs import (
 
 __all__ = [
     "apply_custom_theme",
+    "render_clean_html",
     "render_html",
     "render_header_banner",
     "render_bento_card",

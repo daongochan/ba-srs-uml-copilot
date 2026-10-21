@@ -10,6 +10,7 @@ from src.ui.theme import (
     render_bento_grid,
     render_telemetry_widget,
     render_user_story_card,
+    render_clean_html,
     render_html,
     render_kpi_card,
 )
@@ -100,7 +101,7 @@ def test_theme_functions_smoke():
 
 
 def test_render_html_prevents_commonmark_indentation_leak():
-    """Verify render_html strips leading line spaces and consecutive blank lines."""
+    """Verify render_clean_html (and alias render_html) strips leading line spaces and consecutive blank lines."""
     from unittest.mock import patch
 
     with patch("streamlit.markdown") as mock_markdown:
@@ -111,7 +112,7 @@ def test_render_html_prevents_commonmark_indentation_leak():
             </div>
         </div>
         """
-        render_html(raw_indented_html)
+        render_clean_html(raw_indented_html)
         mock_markdown.assert_called_once()
         passed_arg = mock_markdown.call_args[0][0]
         # Should not have any line starting with 4 or more spaces
@@ -120,12 +121,17 @@ def test_render_html_prevents_commonmark_indentation_leak():
         assert '<div class="test-container">' in passed_arg
         assert mock_markdown.call_args[1].get("unsafe_allow_html") is True
 
+    # Test alias render_html works identically
+    with patch("streamlit.markdown") as mock_markdown2:
+        render_html("<p>test</p>")
+        mock_markdown2.assert_called_once_with("<p>test</p>", unsafe_allow_html=True)
+
 
 def test_render_kpi_card():
-    """Verify render_kpi_card renders directly through render_html."""
+    """Verify render_kpi_card renders directly through render_clean_html."""
     from unittest.mock import patch
 
-    with patch("src.ui.theme.render_html") as mock_render_html:
+    with patch("src.ui.theme.render_clean_html") as mock_render_html:
         render_kpi_card(
             title="SLA Performance",
             value="99.9%",
